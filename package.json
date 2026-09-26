@@ -1,0 +1,9 @@
+{
+  "name": "local-meeting-minutes-preflight",
+  "version": "0.0.0",
+  "private": true,
+  "description": "사전작업 도구 잠금; 제품 웹 기능은 아직 구현하지 않음",
+  "engines": { "node": "24.21.0" },
+  "packageManager": "npm@11.19.0",
+  "devDependencies": { "@openai/codex": "0.157.1" }
+}

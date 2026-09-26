@@ -179,3 +179,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Local preflight evidence, recordings and private caches
+.workflow/
+data/
+.env.*
+!.env.example
+models/
+node_modules/

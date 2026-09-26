@@ -1,0 +1,33 @@
+[project]
+name = "local-meeting-minutes-preflight"
+version = "0.0.0"
+description = "CPU 모델 사전작업 전용 의존성; 제품 구현 전"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "whisperx==3.8.6",
+  "torch==2.8.0",
+  "torchaudio==2.8.0",
+  "torchvision==0.23.0",
+  "torchcodec==0.7.0",
+  "jsonschema>=4.23,<5",
+  "psutil>=7,<8",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[dependency-groups]
+preflight = [
+    "yt-dlp>=2026.8.19",
+]
