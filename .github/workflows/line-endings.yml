@@ -1,0 +1,11 @@
+name: LF line endings
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  line-endings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-line-endings.py
+      - run: python3 scripts/check-line-endings.py --index

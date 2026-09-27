@@ -120,3 +120,17 @@ def test_provider_keeps_secrets_and_source_out_of_argv_and_requires_complete_sch
     reservations.clear()
     with pytest.raises(CodexFailure, match='SCHEMA_INVALID'):
         provider.generate(payload, Minutes.model_json_schema(), lambda: reservations.append('reserved'))
+
+
+def test_cli_state_growth_does_not_relax_result_limit(tmp_path):
+    state = tmp_path / 'state.sqlite-wal'
+    state.write_bytes(b'x' * 2_000_000)
+    code, output, _ = bounded_cli(
+        [sys.executable, '-c', "with open('state.sqlite-wal','ab') as f: f.write(b'x'*1_000_000)"],
+        cwd=tmp_path, env=os.environ.copy(), timeout=5)
+    assert code == 0 and state.stat().st_size == 3_000_000
+    result = tmp_path / 'result.json'
+    with pytest.raises(CodexFailure, match='CODEX_OUTPUT_LIMIT'):
+        bounded_cli([sys.executable, '-c',
+                     "from pathlib import Path; import time; Path('result.json').write_bytes(b'x'*1_000_001); time.sleep(2)"],
+                    cwd=tmp_path, env=os.environ.copy(), timeout=5, result_path=result)

@@ -68,7 +68,8 @@ def kill_tree(process):
 
 def bounded_cli(argv, *, cwd, env, input_bytes=b'', timeout=180, output_limit=4_000_000, result_path=None):
     def limits():
-        resource.setrlimit(resource.RLIMIT_FSIZE, (2_000_000, 2_000_000))
+        # CLI SQLite/WAL files share this limit; result/stdout have smaller independent caps.
+        resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024, 64 * 1024 * 1024))
         resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
     process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, preexec_fn=limits)

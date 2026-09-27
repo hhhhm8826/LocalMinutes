@@ -63,3 +63,14 @@ python scripts/consume-review-acks.py --registry .workflow/session-registry.json
 작업 묶음 완료·리뷰 수신·차단·인수인계 전에 `state.json`의 체크포인트, 진행 작업, 다음 행동, 미완료 리뷰, blockers를 갱신한다. `plan_sync`에는 호환성을 위해 마일스톤·`UPDATED/NO_CHANGE/PENDING`·문서 갱신 식별자만 둔다. 새 환경에서 로컬 상태가 없으면 milestone과 Git 상태에서 재구성하며 과거 PASS를 창작하지 않는다.
 
 완료는 현재 요구에 맞는 구현·검사·증거와 미해결 결함을 대조해 판단한다. Git에는 소스·테스트·잠금·이 네 문서·고지를 포함하고 데이터·모델·인증·개인 증거·번들은 넣지 않는다. 릴리즈는 clean 커밋 바이트와 빌드 자산으로 만들고 필수 문서·비밀 제외·파일 해시를 확인한다. 필요한 설치 검증은 실제 archive SHA와 무패치 설치본을 연결한다. 기존 VERIFIED 번들의 판정을 이후 변경 전체에 자동 승계하지 않는다.
+
+## 줄바꿈
+
+프로젝트 텍스트는 LF로 저장한다. `.gitattributes`의 `* text=auto eol=lf`는 Git 저장·체크아웃을 LF로 통일하고, `.editorconfig`는 지원 편집기의 저장 형식을 맞춘다. `Set-Content` 등 도구가 이를 무시할 수 있으므로 작업 사본과 인덱스를 별도로 검사한다.
+
+```bash
+python3 scripts/check-line-endings.py
+python3 scripts/check-line-endings.py --index
+```
+
+검사는 추적 파일과 Git 제외 대상이 아닌 새 텍스트를 대상으로 하며 바이너리·개인 `.workflow`·의존성·캐시는 변환하지 않는다. `fast`/`release`에 작업 사본 검사를 포함한다. GitHub Actions의 `LF line endings`는 작업 사본과 인덱스를 검사한다. 원격에 반영한 뒤 이를 필수 상태 검사로 지정하면 실패한 PR 병합도 차단할 수 있다. 편집기 설정이나 Git 정규화가 디스크상의 CRLF 저장 자체를 금지하는 것은 아니다.

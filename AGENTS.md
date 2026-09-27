@@ -6,3 +6,5 @@
 - Run actual development and tests in Ubuntu/WSL. Synchronize the Linux source and Windows working copy; preserve unrelated changes and immutable review results.
 - The 120-minute soak is optional and excluded from normal/full/release validation. Run it only on a new explicit user instruction, with a scoped budget and `--user-requested-soak`; old approval or a stale/missing result is not authorization.
 - Follow `docs/workflow.md` to consume handled review notifications at checkpoints and before ending a turn. Never reply to completion notifications.
+
+- Write project text with LF line endings. Follow `.gitattributes` and `.editorconfig`; run `scripts/check-line-endings.py` after cross-platform edits.

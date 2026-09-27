@@ -9,6 +9,7 @@ web_check() {
 }
 case "$mode" in
   fast)
+    .venv/bin/python scripts/check-line-endings.py
     .venv/bin/ruff check src tests
     .venv/bin/pytest -m 'not integration and not model and not live_codex and not slow' "$@"
     source "${XDG_DATA_HOME:-$HOME/.local/share}/local-meeting-minutes/toolchain/env.sh"
@@ -23,6 +24,7 @@ case "$mode" in
   model|live-codex|soak) .venv/bin/python scripts/check-costly.py "$mode" "$@" ;;
   release)
     [[ $# == 0 ]] || { echo 'release does not accept scope overrides' >&2; exit 2; }
+    .venv/bin/python scripts/check-line-endings.py
     .venv/bin/ruff check src tests
     .venv/bin/pytest -m 'not model and not live_codex and not slow'
     web_check
