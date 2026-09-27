@@ -1,14 +1,8 @@
 # Agent Instructions
 
-- Follow `docs/00_PREFLIGHT.md` and `docs/01_MVP_GOAL_PLAN.md`. Start the implementation `/goal` only after READY.
-- Use exactly two existing development sessions: **Astra medium master + Sol 5.6 high verifier**. The master implements and delegates commit-pinned, scoped checks through `codex queue`. Group reviews into R1/R2/R3 and necessary rechecks; never run full validation after every task.
-- Before completing G1–G6, update the plan under section 12.1 and sync its Linux source and Windows copy. Record only milestone/status/version in `state.json.plan_sync`, without detailed change logs. Do not mark incomplete requirements or pending plan updates complete. Documentation-only edits need no extra review or full validation.
-- The verifier finalizes the result, then sends exactly one `VERIFY_RESULT id=<id>; commit=<40-character SHA>; result=<absolute path>`. Never edit the result afterward; save delivery receipts separately. Reuse duplicate requests silently and never reply to completion notifications.
-- After inspecting and handling `.workflow/reviews/<id>/result.json`, the master removes only its notification with the Windows command below. Consumption is not a PASS verdict; it also applies to handled CHANGES_REQUIRED/BLOCKED results. Preserve unrelated messages.
-
-```powershell
-python scripts/consume-review-acks.py --registry .workflow/session-registry.json --accept-result <id>
-```
-
-- At review checkpoints and before ending a turn, run without `--accept-result <id>` to drain late notifications. Do not substitute the read-only `.workflow/queue-read.py`.
-- Legacy ACK/FAIL formats are allowed only for frozen historical IDs in `.workflow/legacy-review-ids.json`; never add new requests.
+- Read `docs/milestone.md` for implemented features and active milestones, and `docs/workflow.md` for execution, review, and `.workflow` rules. Use `README.md` for setup and operation.
+- Keep these three documents current when behavior, commands, or milestones change. Update milestone status before completion; keep detailed evidence/resume state in `.workflow`, not in prose change logs. Keep this file concise and in English.
+- Use exactly two existing sessions: **Astra medium master + Sol 5.6 high verifier**. Delegate commit-pinned, scoped verification through `codex queue`; never create extra sessions or repeat full validation after every task.
+- Run actual development and tests in Ubuntu/WSL. Synchronize the Linux source and Windows working copy; preserve unrelated changes and immutable review results.
+- The 120-minute soak is optional and excluded from normal/full/release validation. Run it only on a new explicit user instruction, with a scoped budget and `--user-requested-soak`; old approval or a stale/missing result is not authorization.
+- Follow `docs/workflow.md` to consume handled review notifications at checkpoints and before ending a turn. Never reply to completion notifications.

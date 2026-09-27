@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import platform
-import shutil
+import shlex
 import subprocess
 import tarfile
 import urllib.request
@@ -17,7 +17,9 @@ CODEX = '0.157.1'
 def main():
     if platform.system() != 'Linux' or os.geteuid() == 0:
         raise SystemExit('Ubuntu 일반 사용자에서만 실행')
-    root = Path.home() / '.local/share/local-meeting-minutes/toolchain'
+    root = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'local-meeting-minutes/toolchain'
+    if not root.is_absolute():
+        raise SystemExit('XDG_DATA_HOME must be absolute')
     root.mkdir(parents=True, exist_ok=True)
     archive = root / f'node-v{NODE}-linux-x64.tar.xz'
     node_root = root / f'node-v{NODE}-linux-x64'
@@ -45,7 +47,7 @@ def main():
     subprocess.run([str(node_root/'bin/npm'), 'install', '--prefix', str(cli_root), '--save-exact',
                     '--no-audit', '--no-fund', f'@openai/codex@{CODEX}'], env=env, check=True)
     env_file = root/'env.sh'
-    env_file.write_text(f'export PATH="{cli_root}/node_modules/.bin:{node_root}/bin:{uv_env}/bin:/usr/local/bin:/usr/bin:/bin"\n')
+    env_file.write_text('export PATH=' + shlex.quote(f'{cli_root}/node_modules/.bin:{node_root}/bin:{uv_env}/bin:/usr/local/bin:/usr/bin:/bin') + '\n')
     manifest = {'node': NODE, 'node_sha256': actual, 'uv': UV, 'codex_version': CODEX,
                 'env_script': str(env_file), 'node_root': str(node_root),
                 'codex': str(cli_root/'node_modules/.bin/codex'), 'uv_path': str(uv_env/'bin/uv')}

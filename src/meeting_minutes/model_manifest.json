@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "revision": "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf",
+      "files": [
+        {
+          "path": "tokenizer.json",
+          "bytes": 2710337,
+          "sha256": "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd"
+        },
+        {
+          "path": "README.md",
+          "bytes": 1445,
+          "sha256": "b3068692728faed23580cce5cd569fc47ff76c690c032b2641ffd5554ea64d8f"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "bytes": 340,
+          "sha256": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
+        },
+        {
+          "path": "vocabulary.json",
+          "bytes": 1068114,
+          "sha256": "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
+        },
+        {
+          "path": "model.bin",
+          "bytes": 1617884929,
+          "sha256": "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da"
+        },
+        {
+          "path": "config.json",
+          "bytes": 2263,
+          "sha256": "b0253ea6c0d3bea6b1e19e91a02acfd3b53f4467362efcb5a3e6b16c9b3a9b7e"
+        }
+      ],
+      "name": "asr",
+      "repo_id": "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+    },
+    {
+      "revision": "629c9a3501c10ba128bf3fa1eebb12af3be03f61",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1891,
+          "sha256": "9a1472ae3d3f81d17789147112929375736b480bd43798c634f5824a298f0d53"
+        },
+        {
+          "path": "vocab.json",
+          "bytes": 18163,
+          "sha256": "4db1411162e9603b3b555a7dbc08807256b885ea0beb60ab110b283c338cfc85"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "bytes": 214,
+          "sha256": "60ca5a31e13f69ee2fbf147504c8676db5f6398fd7a6b12294341dff838edfcf"
+        },
+        {
+          "path": "pytorch_model.bin",
+          "bytes": 1266864241,
+          "sha256": "762e434b6f07fc1da2a582e8888cefce2ee7678f531828bc9b628c985b7607d3"
+        },
+        {
+          "path": "trainer_state.json",
+          "bytes": 511605,
+          "sha256": "6f38b27ca44ba0bf90f0c4a81ac71f6e721a63b891bf060b0b2fb9f7d1b08a32"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 1266747952,
+          "sha256": "29be111b9247cfc2c72f125c1b1f50021ecfded8f0d947bbfb7e31dc7f0ddd07"
+        },
+        {
+          "path": "training_args.bin",
+          "bytes": 2927,
+          "sha256": "beb15ba46f1b37e65dd9dcce750f08425e9205ddd49ef396f2e6102699c11cbc"
+        },
+        {
+          "path": "config.json",
+          "bytes": 2313,
+          "sha256": "51dc5f213d247606740afc690711e9880349d2e2ff29c922c657e2116b660ffa"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 161,
+          "sha256": "739a1c535c79132847eba6488d1160638450012037d9114ea2f9b01bcd64cbb1"
+        }
+      ],
+      "name": "ko_align",
+      "repo_id": "kresnik/wav2vec2-large-xlsr-korean"
+    },
+    {
+      "revision": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "files": [
+        {
+          "path": "diarization.gif",
+          "bytes": 861445,
+          "sha256": "0d925ad38995d89009260e493b0ae2e684c3e1397f495265ed841c45c4f73a35"
+        },
+        {
+          "path": "README.md",
+          "bytes": 9978,
+          "sha256": "2db91f9265bd81f1653ff088b5bff22bf6aebebea03328513af65501643f8a31"
+        },
+        {
+          "path": ".gitattributes",
+          "bytes": 1571,
+          "sha256": "5ca5d721264b62c84e55b912e7cdb019439cad30d41df8aeea3a23f9b1f86ef3"
+        },
+        {
+          "path": "config.yaml",
+          "bytes": 444,
+          "sha256": "5ce2bfa9a938dc132cec1172592d65173cbb8f444ea1e4133f10f9391de155be"
+        },
+        {
+          "path": "embedding/README.md",
+          "bytes": 938,
+          "sha256": "fa9e5105ae95edb231d841476cdb91eef4be0621c372ed4f7d3421294b5f8ad7"
+        },
+        {
+          "path": "embedding/pytorch_model.bin",
+          "bytes": 26646242,
+          "sha256": "6f10ff60898a1d185fa22e1d11e0bfa8a92efec811f11bca48cb8cafebefd929"
+        },
+        {
+          "path": "plda/README.md",
+          "bytes": 220,
+          "sha256": "e1316dbbeb3261431478d48ceebbd4bba395c3587e7b80c254dbab00f1209d0a"
+        },
+        {
+          "path": "plda/plda.npz",
+          "bytes": 133852,
+          "sha256": "9b77bcd840692710dd3496f62ecfeed8d8e5f002fd991b785079b244eab7d255"
+        },
+        {
+          "path": "plda/xvec_transform.npz",
+          "bytes": 134376,
+          "sha256": "325f1ce8e48f7e55e9c8aa47e05d2766b7c48c4b25b8de8dd751e7a4cc5fbe8f"
+        },
+        {
+          "path": "segmentation/pytorch_model.bin",
+          "bytes": 5906507,
+          "sha256": "7ad24338d844fb95985486eb1a464e32d229f6d7a03c9abe60f978bacf3f816e"
+        }
+      ],
+      "name": "diarization",
+      "repo_id": "pyannote/speaker-diarization-community-1"
+    }
+  ],
+  "includes_weights": false,
+  "gated_terms_url": "https://huggingface.co/pyannote/speaker-diarization-community-1",
+  "english_alignment": {
+    "sha256": "488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d",
+    "url": "https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth",
+    "bytes": 377664473,
+    "filename": "wav2vec2_fairseq_base_ls960_asr_ls960.pth"
+  }
+}

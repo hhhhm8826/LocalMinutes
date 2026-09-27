@@ -1,6 +1,6 @@
 param(
     [string]$Distro = 'Ubuntu',
-    [string]$Repo = '/home/cs2023/src/local-meeting-minutes',
+    [Parameter(Mandatory = $true)][string]$Repo,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Command
 )
 $ErrorActionPreference = 'Stop'
@@ -9,6 +9,6 @@ if (-not $Repo.StartsWith('/') -or $Repo.StartsWith('/mnt/')) {
 }
 & wsl.exe --distribution $Distro --exec test -d $Repo
 if ($LASTEXITCODE -ne 0) { throw "WSL 저장소가 없습니다: $Repo" }
-if (-not $Command) { $Command = @('bash', '-l') }
+if (-not $Command) { $Command = @('bash', 'scripts/run.sh') }
 & wsl.exe --distribution $Distro --cd $Repo --exec @Command
 exit $LASTEXITCODE
