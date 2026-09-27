@@ -1,3 +1,4 @@
+import { confirmAction } from './confirm'
 import { useEffect, useId } from 'react'
 
 const pending = new Set<string>()
@@ -11,6 +12,6 @@ export function useUnsaved(value: boolean) {
     return () => { pending.delete(id); window.removeEventListener('beforeunload', handler) }
   }, [id, value])
 }
-export function confirmNavigation() {
-  return pending.size === 0 || window.confirm('저장하지 않은 변경이 있습니다. 변경을 버리고 이동할까요?')
+export async function confirmNavigation() {
+  return pending.size === 0 || confirmAction('저장하지 않은 변경이 있습니다. 변경을 버리고 이동할까요?')
 }

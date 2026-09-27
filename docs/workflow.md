@@ -22,6 +22,8 @@ bash scripts/check.sh release
 
 `release`는 lint·저비용 Python 회귀·TypeScript·mock 기반 E2E·필수 실행 증거 무결성 검사다. 실제 모델·CLI·120분 처리를 자동 실행하지 않는다. `.workflow`가 없는 새 checkout은 실행 증거 검사를 통과했다고 표시할 수 없다. 부족한 증거를 보고하고 허용된 필요한 범위만 준비한다.
 
+현재 `release`는 M2 증거 프로필과 `.workflow/evidence/m2/execution-index.json`을 검사한다. 한국어·영어 모델 증거의 유효한 재사용, 현재 회의록/영상 실제 생성, 의미 비교, 실제 YouTube 획득, 설치 증거가 모두 필요하다. 과거 MVP 색인은 보존하며 M2 통과로 대체하지 않는다. 누락·차단된 실행은 실패 상태로 남긴다. 증거만 다시 검사할 때는 `python scripts/check-evidence.py --profile m2 --manifest .workflow/evidence/m2/execution-index.json`을 사용한다.
+
 성공한 검사·실제 실행 증거는 관련 코드·설정·잠금·fixture 지문이 유효하면 재사용한다. 전체 회귀는 릴리즈나 넓은 영향에 필요한 때만 수행하고, 실패 수정 후에는 해당 검사와 영향 범위만 재검증한다. mock 결과를 실제 모델·CLI 성공으로 표현하지 않는다. 미완료를 문서에서 지워 완료로 만들지 않는다.
 
 ### 선택적 고비용 검사
@@ -74,3 +76,5 @@ python3 scripts/check-line-endings.py --index
 ```
 
 검사는 추적 파일과 Git 제외 대상이 아닌 새 텍스트를 대상으로 하며 바이너리·개인 `.workflow`·의존성·캐시는 변환하지 않는다. `fast`/`release`에 작업 사본 검사를 포함한다. GitHub Actions의 `LF line endings`는 작업 사본과 인덱스를 검사한다. 원격에 반영한 뒤 이를 필수 상태 검사로 지정하면 실패한 PR 병합도 차단할 수 있다. 편집기 설정이나 Git 정규화가 디스크상의 CRLF 저장 자체를 금지하는 것은 아니다.
+
+웹에서 다운로드하는 텍스트·Markdown 파일은 Windows 사용을 위해 UTF-8·CRLF로 제공한다. 저장소 소스·문서는 기존 LF 규칙을 유지한다.

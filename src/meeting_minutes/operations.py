@@ -79,6 +79,8 @@ def backup(settings, destination):
         with closing(sqlite3.connect(settings.database_path)) as source, closing(sqlite3.connect(database)) as target:
             source.backup(target)
             target.execute('DELETE FROM owner_sessions')
+            if target.execute("SELECT 1 FROM sqlite_master WHERE name='local_sessions'").fetchone():
+                target.execute('DELETE FROM local_sessions')
             target.commit()
             target.execute('VACUUM')
             target.execute('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -161,6 +163,8 @@ def restore(source, destination):
             if connection.execute('PRAGMA foreign_key_check').fetchone():
                 raise RuntimeError('백업 데이터베이스 참조가 손상됐습니다.')
             connection.execute('DELETE FROM owner_sessions')
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name='local_sessions'").fetchone():
+                connection.execute('DELETE FROM local_sessions')
             connection.commit()
             connection.execute('VACUUM')
             connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')

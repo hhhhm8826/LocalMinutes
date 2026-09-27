@@ -3,7 +3,7 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 umask 077
 if [[ ${1:-} == --system-plan ]]; then
-  printf '%s\n' 'sudo apt-get update' 'sudo apt-get install --no-install-recommends ffmpeg git ca-certificates curl build-essential python3.12-venv python3.12-dev pkg-config'
+  printf '%s\n' 'sudo apt-get update' 'sudo apt-get install --no-install-recommends ffmpeg git ca-certificates curl build-essential python3.12-venv python3.12-dev pkg-config bubblewrap'
   exit 0
 fi
 [[ $# == 0 ]] || { echo 'usage: install-ubuntu.sh [--system-plan]' >&2; exit 2; }
@@ -21,6 +21,7 @@ for command in ffmpeg ffprobe git; do
   command -v "$command" >/dev/null || { echo "필수 시스템 도구 없음: $command (--system-plan 참고)" >&2; exit 2; }
 done
 python3.12 scripts/setup-toolchain.py
+python3.12 scripts/setup-youtube.py
 toolchain="${XDG_DATA_HOME:-$HOME/.local/share}/local-meeting-minutes/toolchain"
 source "$toolchain/env.sh"
 uv sync --frozen --no-dev --python python3.12

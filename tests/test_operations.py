@@ -14,6 +14,8 @@ from sqlalchemy import text
 from meeting_minutes.operations import backup, restore
 from meeting_minutes.settings import Settings
 from meeting_minutes.storage import make_engine
+from meeting_minutes.retention import policy, reap_retention
+from meeting_minutes.repository import Repository
 from test_minutes_management import ready
 from test_queue_media import context  # noqa: F401
 
@@ -23,6 +25,9 @@ def test_backup_restore_new_path_without_auth_and_lock_protection(context, tmp_p
     meeting, _ = ready(context)
     with repo.write() as connection:
         connection.execute(text("INSERT INTO owner_sessions VALUES ('secret-hash','secret-csrf',9999999999)"))
+        connection.execute(text("INSERT INTO local_sessions VALUES ('local-secret-hash','local-secret-csrf',9999999999)"))
+    reap_retention(repo, settings, meeting['input_received_at'] + 31 * 86400)
+    expired = repo.meeting(meeting['id'])
     destination = tmp_path / 'backup.tar.gz'
     with (settings.data_dir / 'app.lock').open('a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -41,6 +46,10 @@ def test_backup_restore_new_path_without_auth_and_lock_protection(context, tmp_p
     with engine.connect() as connection:
         assert connection.execute(text('SELECT title FROM meetings WHERE id=:id'), {'id': meeting['id']}).scalar_one() == meeting['title']
         assert connection.execute(text('SELECT COUNT(*) FROM owner_sessions')).scalar_one() == 0
+        assert connection.execute(text('SELECT COUNT(*) FROM local_sessions')).scalar_one() == 0
+    restored_repo = Repository(engine)
+    assert restored_repo.meeting(meeting['id']) == expired
+    assert policy(restored_repo) == policy(repo)
     engine.dispose()
     with pytest.raises(RuntimeError):
         restore(destination, restored)

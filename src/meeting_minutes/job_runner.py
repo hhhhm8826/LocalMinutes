@@ -35,6 +35,11 @@ def persist_artifact(repository, settings, job, partial, stage, fingerprint):
 
 
 def run(repository, settings, job):
+    if not job['media_id'] and not job['transcript_version']:
+        meeting = repository.meeting(job['meeting_id'])
+        if meeting['source_kind'] == 'youtube':
+            from .youtube_runner import acquire_job
+            job = acquire_job(repository, settings, job)
     if job['transcript_version']:
         meeting = json.loads(repository.meeting(job['meeting_id'])['settings_json'])
         if meeting['allow_external_text']:

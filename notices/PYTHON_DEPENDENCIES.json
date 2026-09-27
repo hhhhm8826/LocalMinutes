@@ -1254,6 +1254,24 @@
         "yarl-1.25.1.dist-info/licenses/LICENSE",
         "yarl-1.25.1.dist-info/licenses/NOTICE"
       ]
+    },
+    {
+      "name": "yt-dlp",
+      "version": "2026.8.19",
+      "license_metadata": "Unlicense",
+      "license_classifiers": [],
+      "license_files": [
+        "yt_dlp-2026.8.19.dist-info/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "yt-dlp-ejs",
+      "version": "0.8.0",
+      "license_metadata": "Unlicense AND MIT AND ISC",
+      "license_classifiers": [],
+      "license_files": [
+        "yt_dlp_ejs-0.8.0.dist-info/licenses/LICENSE"
+      ]
     }
   ]
 }

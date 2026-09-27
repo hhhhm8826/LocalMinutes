@@ -1,4 +1,5 @@
 """단일 관리자와 시도별 프로세스. 재시작은 명시적 복구를 기다린다."""
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import json
 import os
@@ -24,7 +25,8 @@ from .temporary import cleanup_attempt_temporary
 def worker_env(settings):
     env = os.environ.copy()
     for field in ('data_dir', 'config_dir', 'cache_dir', 'max_duration_seconds', 'threads', 'codex_cli',
-                  'codex_home', 'codex_user_home', 'codex_model', 'codex_timeout_seconds', 'codex_input_bytes', 'codex_max_calls'):
+                  'codex_home', 'codex_user_home', 'codex_model', 'codex_timeout_seconds', 'codex_input_bytes', 'codex_max_calls',
+                  'youtube_deno', 'youtube_bwrap'):
         env['MINUTES_' + field.upper()] = str(getattr(settings, field))
     return env
 
@@ -55,6 +57,14 @@ class Worker:
     def cleanup_attempt(self, job):
         # 명시된 시도의 임시 파일만 지운다. 완료 산출물은 재시도에서 재사용한다.
         cleanup_attempt_temporary(job['id'], job['attempt_id'])
+        # A crash between rename and DB commit must not leave an unpublished download.
+        name = f'{job["meeting_id"]}-{job["attempt_id"]}.source'
+        with self.repository.engine.connect() as connection:
+            referenced = connection.execute(text('SELECT 1 FROM media_assets WHERE stored_name=:name'), {'name': name}).first()
+        media_root = self.settings.data_dir / 'media'
+        safe_file(media_root, name + '.part').unlink(missing_ok=True)
+        if not referenced:
+            safe_file(media_root, name).unlink(missing_ok=True)
         for suffix in ('.wav.part', '.result.part', '-transcribe.json.part', '-align.json.part', '-diarize.json.part', '-summarize.json.part'):
             partial = safe_file(self.settings.data_dir / 'artifacts', f'{job["id"]}-{job["attempt_id"]}{suffix}')
             partial.unlink(missing_ok=True)
@@ -161,16 +171,27 @@ class Worker:
         try:
             self.recover()
             last_retention = 0
-            while not self.stopping:
-                reap_deletions(self.repository, self.settings)
-                if time.monotonic() - last_retention >= 60:
-                    reap_retention(self.repository, self.settings)
-                    last_retention = time.monotonic()
-                job = self.repository.claim()
-                if job:
-                    self.execute(job)
-                else:
-                    time.sleep(.2)
+            # One audio-analysis slot and one independent text-only regeneration slot.
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                running = {}
+                try:
+                    while not self.stopping:
+                        for lane, future in list(running.items()):
+                            if future.done():
+                                future.result()
+                                del running[lane]
+                        reap_deletions(self.repository, self.settings)
+                        if time.monotonic() - last_retention >= 60:
+                            reap_retention(self.repository, self.settings)
+                            last_retention = time.monotonic()
+                        for lane in ('analysis', 'summary'):
+                            if lane not in running:
+                                job = self.repository.claim(lane)
+                                if job:
+                                    running[lane] = pool.submit(self.execute, job)
+                        time.sleep(.2)
+                finally:
+                    self.stopping = True
             return True
         finally:
             self.close()

@@ -71,10 +71,7 @@ def test_edit_confirm_versions_evidence_and_stale_request(context):  # noqa: F81
         transcript_version=version, allow_external_text=True), 'edit-test-job')
     original = complete(repo, job, version)
     revision = repo.meeting(meeting['id'])['revision']
-    with pytest.raises(Conflict, match='REVIEW_REQUIRED'):
-        edit_minutes(repo, meeting['id'], original['id'], revision, confirm=True)
     content = Minutes.model_validate(original['content'])
-    content.decisions[0].review_status = 'verified'
     edited = edit_minutes(repo, meeting['id'], original['id'], revision, content)
     with pytest.raises(Conflict, match='REVISION_CONFLICT'):
         edit_minutes(repo, meeting['id'], original['id'], revision, content)
@@ -116,8 +113,11 @@ def test_minutes_edit_http_csrf_large_valid_body_and_invalid_evidence(context): 
         invalid = {'expected_revision': edited.json()['meeting_revision'], 'content': edited.json()['content']}
         invalid['content']['decisions'][0]['source_segment_ids'] = ['missing']
         path = f'/api/meetings/{meeting["id"]}/minutes/{edited.json()["id"]}'
-        assert client.patch(path, headers=headers, json=invalid).status_code == 422
-        assert len(client.get(f'/api/meetings/{meeting["id"]}/minutes/versions').json()) == 2
+        manual = client.patch(path, headers=headers, json=invalid)
+        assert manual.status_code == 200
+        assert manual.json()['content']['decisions'][0]['review_status'] == 'user_authored'
+        assert manual.json()['content']['decisions'][0]['source_segment_ids'] == []
+        assert len(client.get(f'/api/meetings/{meeting["id"]}/minutes/versions').json()) == 3
 
 
 def test_queued_generation_rejects_changed_model_configuration(context, monkeypatch):  # noqa: F811

@@ -4,11 +4,10 @@ import json
 from sqlalchemy import text
 
 from .codex_provider import CodexCliProvider, CodexFailure, INSTRUCTIONS
-from .contracts import Minutes
 from .minutes_storage import save_minutes
 from .minutes_long import generate_minutes
 from .minutes_context import FORMAT_VERSION, TASKS
-from .minutes_validation import text_payload, validate_minutes
+from .minutes_generation import generation_payload, materialize_generation, generation_model
 from .minutes_identity import generation_identity
 from .speech_pipeline import checkpoint, fingerprint
 from .temporary import attempt_prefix
@@ -30,6 +29,8 @@ def snapshot(repository, job, settings):
                                         {'id': job['meeting_id']}).scalar_one()
             request = {'transcript_version': current['transcript_version'], 'meeting': json.loads(meeting['settings_json']),
                        'base_minutes_id': meeting['minutes_revision'], 'revision': number}
+            request['meeting'].update(document_kind=meeting['document_kind'], source_kind=meeting['source_kind'],
+                                      source_metadata=json.loads(meeting['source_metadata_json']))
             request['generation_key'] = generation_identity(request['transcript_version'], request['meeting'], settings)
             connection.execute(text('UPDATE jobs SET request_json=:request WHERE id=:id'),
                                {'request': json.dumps(request), 'id': job['id']})
@@ -37,7 +38,7 @@ def snapshot(repository, job, settings):
             raise CodexFailure('CODEX_GENERATION_CONFIG_CHANGED')
         transcript = connection.execute(text('SELECT content_json FROM transcript_versions WHERE id=:id AND meeting_id=:meeting'),
             {'id': request['transcript_version'], 'meeting': job['meeting_id']}).scalar_one()
-    payload = text_payload(job['meeting_id'], request['transcript_version'], request['revision'], request['meeting'], json.loads(transcript))
+    payload = generation_payload(job['meeting_id'], request['transcript_version'], request['revision'], request['meeting'], json.loads(transcript))
     return request, payload
 
 
@@ -48,14 +49,14 @@ def run_minutes(repository, settings, job):
             return 'COMPLETED', None
         request, payload = material
         inputs = {'payload': fingerprint(payload), 'model': settings.codex_model, 'prompt': fingerprint(INSTRUCTIONS),
-                  'schema': fingerprint(Minutes.model_json_schema()), 'adapter': FORMAT_VERSION, 'tasks': fingerprint(TASKS),
+                  'schema': fingerprint(generation_model(payload).model_json_schema()), 'adapter': FORMAT_VERSION, 'tasks': fingerprint(TASKS),
                   'generation_key': request['generation_key']}
         provider = CodexCliProvider(settings)
         provider.temporary_prefix = attempt_prefix(job['id'], job['attempt_id'])
         def calculate():
             return generate_minutes(repository, settings, job, provider, payload, request['meeting'])
         generated = checkpoint(repository, settings, job, 'SUMMARIZE', inputs, calculate)
-        result = validate_minutes(generated, payload, request['meeting'])
+        result = materialize_generation(generated, payload, request['meeting'])
         repository.stage(job, 'SAVE')
         save_minutes(repository, job, result, request['base_minutes_id'])
         return 'COMPLETED', None

@@ -6,6 +6,11 @@ from pathlib import Path
 
 
 REQUIRED = {'model-ko', 'model-en', 'live-ko', 'live-en', 'live-long', 'installation'}
+REQUIRED_PROFILES = {
+    'mvp': REQUIRED,
+    'm2': {'model-ko', 'model-en', 'live-meeting', 'live-video',
+           'semantic-comparison', 'youtube-acquisition', 'installation'},
+}
 
 
 def digest(path):
@@ -20,15 +25,17 @@ def inside(root, name):
     return path
 
 
-def audit(root, manifest_path, include_soak=False):
+def audit(root, manifest_path, include_soak=False, profile='mvp'):
     manifest = json.loads(manifest_path.read_text())
     if manifest.get('schema_version') != 1:
         raise ValueError('Unsupported evidence schema')
+    if profile not in REQUIRED_PROFILES or manifest.get('profile', 'mvp') != profile:
+        raise ValueError('Evidence profile mismatch')
     checks = manifest['checks']
     ids = [check['id'] for check in checks]
     if len(ids) != len(set(ids)):
         raise ValueError('Duplicate evidence ID')
-    required = REQUIRED | ({'soak'} if include_soak else set())
+    required = REQUIRED_PROFILES[profile] | ({'soak'} if include_soak else set())
     findings = [{'id': key, 'reason': 'MISSING'} for key in sorted(required - set(ids))]
     for check in checks:
         if check['id'] == 'soak' and not include_soak:
@@ -39,6 +46,11 @@ def audit(root, manifest_path, include_soak=False):
         evidence = inside(manifest_path.parent, check['path'])
         if not evidence.is_file() or digest(evidence) != check['sha256']:
             reasons.append('EVIDENCE_CHANGED_OR_MISSING')
+        for name, expected in check.get('artifacts', {}).items():
+            artifact = inside(manifest_path.parent, name)
+            if not artifact.is_file() or digest(artifact) != expected:
+                reasons.append('ARTIFACT_CHANGED_OR_MISSING')
+                break
         if not check.get('inputs'):
             reasons.append('NO_INPUT_FINGERPRINTS')
         changed = []
@@ -58,11 +70,12 @@ def audit(root, manifest_path, include_soak=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', type=Path, default=Path('.workflow/evidence/execution-index.json'))
+    parser.add_argument('--profile', choices=sorted(REQUIRED_PROFILES), default='mvp')
     parser.add_argument('--include-soak', action='store_true', help='Audit optional historical soak evidence; never executes it')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     try:
-        result = audit(root, args.manifest.resolve(), args.include_soak)
+        result = audit(root, args.manifest.resolve(), args.include_soak, args.profile)
     except (OSError, ValueError, KeyError, TypeError) as error:
         result = {'status': 'NOT_VERIFIED', 'reason': type(error).__name__}
     print(json.dumps(result, ensure_ascii=False, indent=2))

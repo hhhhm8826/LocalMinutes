@@ -3,10 +3,13 @@ import hashlib
 import json
 import re
 import time
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 
 from .contracts import Minutes
+from .documents import legacy_document, parse_document
+from .document_edits import validate_edit
 from .minutes_identity import generation_identity
 from .minutes_validation import text_payload, validate_minutes
 from .repository import Conflict, Missing, identifier
@@ -37,6 +40,9 @@ def queue_generation(repository, settings, meeting_id, request, key):
             raise Conflict('REVISION_CONFLICT')
         options = json.loads(meeting['settings_json'])
         options['allow_external_text'] = True
+        settings_options = dict(options)
+        options.update(document_kind=meeting['document_kind'], source_kind=meeting['source_kind'],
+                       source_metadata=json.loads(meeting['source_metadata_json']))
         identity = generation_identity(request.transcript_version, options, settings)
         candidates = connection.execute(text('''SELECT * FROM jobs WHERE meeting_id=:meeting
             AND json_extract(request_json,'$.generation_key')=:identity ORDER BY sequence DESC'''),
@@ -63,7 +69,7 @@ def queue_generation(repository, settings, meeting_id, request, key):
              'version': request.transcript_version, 'snapshot': json.dumps(snapshot, ensure_ascii=False)})
         if not json.loads(meeting['settings_json'])['allow_external_text']:
             connection.execute(text('UPDATE meetings SET settings_json=:settings,revision=revision+1,updated_at=:now WHERE id=:id'),
-                               {'settings': json.dumps(options), 'now': now, 'id': meeting_id})
+                               {'settings': json.dumps(settings_options), 'now': now, 'id': meeting_id})
     return repository.job(job_id)
 
 
@@ -90,9 +96,23 @@ def read_minutes(repository, meeting_id, version=None):
     with repository.engine.connect() as connection:
         row = connection.execute(text('SELECT * FROM minutes_revisions WHERE id=:id AND meeting_id=:meeting'),
                                  {'id': version, 'meeting': meeting_id}).mappings().first()
+        transcript = None
+        cached_document = None
+        if row:
+            transcript = connection.execute(text('SELECT content_json FROM transcript_versions WHERE id=:id AND meeting_id=:meeting'),
+                {'id': row['transcript_version'], 'meeting': meeting_id}).scalar_one_or_none()
+            cached_document = connection.execute(text('SELECT content_json FROM document_snapshots WHERE result_id=:id'),
+                                                 {'id': row['id']}).scalar_one_or_none()
     if not row:
         raise Missing('MINUTES_NOT_READY')
-    return {'id': row['id'], 'parent_id': row['parent_id'], 'content': json.loads(row['content_json']),
+    content = json.loads(row['content_json'])
+    document = (legacy_document(content, json.loads(meeting['settings_json']), json.loads(transcript) if transcript else None,
+                               generated_at=datetime.fromtimestamp(row['created_at'], timezone.utc))
+                if content.get('schema_version', 1) == 1 else parse_document(content))
+    if cached_document:
+        document = parse_document(json.loads(cached_document))
+    return {'id': row['id'], 'created_at': row['created_at'], 'parent_id': row['parent_id'], 'content': content,
+            'document': document.model_dump(mode='json'), 'source_available': transcript is not None,
             'meeting_revision': meeting['revision'], 'stale_transcript': row['transcript_version'] != meeting['transcript_version']}
 
 
@@ -114,26 +134,41 @@ def edit_minutes(repository, meeting_id, parent_id, expected_revision, content=N
             raise Conflict('REVISION_CONFLICT')
         row = connection.execute(text('SELECT * FROM minutes_revisions WHERE id=:id AND meeting_id=:meeting'),
                                  {'id': parent_id, 'meeting': meeting_id}).mappings().one()
-        previous = Minutes.model_validate_json(row['content_json'])
-        if previous.transcript_version != meeting['transcript_version']:
-            raise Conflict('TRANSCRIPT_CHANGED')
-        supplied = content or previous
-        if (supplied.meeting_id != meeting_id or supplied.transcript_version != previous.transcript_version
-                or supplied.revision != previous.revision):
-            raise Conflict('MINUTES_SNAPSHOT_MISMATCH')
-        candidate = supplied.model_copy(update={'status': 'confirmed' if confirm else 'draft'})
-        transcript = json.loads(connection.execute(text('SELECT content_json FROM transcript_versions WHERE id=:id'),
-                                                   {'id': previous.transcript_version}).scalar_one())
+        previous = parse_document(json.loads(row['content_json']))
+        cached_document = connection.execute(text('SELECT content_json FROM document_snapshots WHERE result_id=:id'),
+                                             {'id': row['id']}).scalar_one_or_none()
+        if cached_document:
+            previous = parse_document(json.loads(cached_document))
+        if getattr(previous, 'document_kind', 'meeting') != 'meeting' or meeting['document_kind'] != 'meeting':
+            raise Conflict('SUMMARY_READ_ONLY')
+        raw_transcript = connection.execute(text('SELECT content_json FROM transcript_versions WHERE id=:id'),
+                                            {'id': previous.transcript_version}).scalar_one_or_none()
+        transcript = json.loads(raw_transcript) if raw_transcript else None
         options = json.loads(meeting['settings_json'])
-        payload = text_payload(meeting_id, previous.transcript_version, previous.revision, options, transcript, require_consent=False)
-        validated = validate_minutes(candidate.model_dump(), payload, options, generated=False)
-        if confirm and any(item.review_status == 'needs_review' for item in [*validated.decisions, *validated.action_items]):
-            raise Conflict('MINUTES_REVIEW_REQUIRED')
+        supplied = content or previous
+        # Old clients can submit schema 1; validate live evidence before adapting.
+        if isinstance(supplied, Minutes):
+            if transcript is not None:
+                payload = text_payload(meeting_id, previous.transcript_version, previous.revision, options, transcript, require_consent=False)
+                validate_minutes(supplied.model_dump(), payload, options, generated=False)
+            supplied = legacy_document(supplied.model_dump(), options, transcript,
+                generated_at=datetime.fromtimestamp(row['created_at'], timezone.utc))
+            if cached_document and transcript is None:
+                old_topics = {topic.id: topic for topic in previous.topics}
+                for topic in supplied.topics:
+                    old = old_topics.get(topic.id)
+                    if old and topic.source_segment_ids == old.source_segment_ids:
+                        topic.starts = old.starts
+                supplied.metadata = previous.metadata
+        if isinstance(previous, Minutes):
+            previous = legacy_document(previous.model_dump(), options, transcript,
+                generated_at=datetime.fromtimestamp(row['created_at'], timezone.utc))
+        validated = validate_edit(previous, supplied, confirm)
         number = connection.execute(text("SELECT COALESCE(MAX(json_extract(content_json,'$.revision')),0)+1 FROM minutes_revisions WHERE meeting_id=:id"),
                                     {'id': meeting_id}).scalar_one()
         version, now = identifier(), time.time()
         connection.execute(text('''INSERT INTO minutes_revisions VALUES (:id,:meeting,:transcript,:parent,:content,:now)'''),
-            {'id': version, 'meeting': meeting_id, 'transcript': previous.transcript_version, 'parent': parent_id,
+            {'id': version, 'meeting': meeting_id, 'transcript': row['transcript_version'], 'parent': parent_id,
              'content': validated.model_copy(update={'revision': number}).model_dump_json(), 'now': now})
         connection.execute(text('UPDATE meetings SET minutes_revision=:version,revision=revision+1,updated_at=:now WHERE id=:id'),
                            {'id': meeting_id, 'version': version, 'now': now})

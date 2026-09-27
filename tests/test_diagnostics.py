@@ -55,7 +55,7 @@ def test_diagnostics_auth_cache_and_observed_usage(context, monkeypatch):  # noq
         assert not calls
         client.post('/api/auth/login', headers={'origin': settings.origin}, json={'key': settings.owner_key_path.read_text()})
         result = client.get('/api/diagnostics').json()
-        assert result['database_revision'] == '0005'
+        assert result['database_revision'] == '0009'
         assert result['usage']['output_tokens'] == 4
         assert result['model_cache']['inference_checked'] is False
         assert 'owner-key' not in json.dumps(result)

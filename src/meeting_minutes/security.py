@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 
 COOKIE = "minutes_session"
+LOCAL_COOKIE = 'minutes_local_session'
 
 
 def digest(value):
@@ -29,16 +30,44 @@ def prepare_owner_key(path):
         os.fsync(stream.fileno())
 
 
-def owner_session(request: Request):
-    token = request.cookies.get(COOKIE, "")
-    if len(token) > 200:
-        raise HTTPException(401, "로컬 소유자 인증이 필요합니다")
+def session_row(request, table, cookie):
+    token = request.cookies.get(cookie, '')
+    if not token or len(token) > 200:
+        return None
     with request.app.state.engine.connect() as connection:
-        row = connection.execute(text("SELECT csrf_token, expires_at FROM owner_sessions WHERE token_hash=:hash"),
+        row = connection.execute(text(f"SELECT csrf_token, expires_at FROM {table} WHERE token_hash=:hash"),
                                  {"hash": digest(token)}).mappings().first()
-    if not row or row["expires_at"] <= time.time():
-        raise HTTPException(401, "로컬 소유자 인증이 필요합니다")
+    return dict(row) if row and row['expires_at'] > time.time() else None
+
+
+def has_owner(request):
+    return session_row(request, 'owner_sessions', COOKIE) is not None
+
+
+def ensure_local_session(request, response):
+    existing = session_row(request, 'local_sessions', LOCAL_COOKIE)
+    if existing:
+        return existing
+    token, csrf, now = secrets.token_urlsafe(32), secrets.token_urlsafe(32), time.time()
+    with request.app.state.engine.begin() as connection:
+        connection.execute(text('DELETE FROM local_sessions WHERE expires_at<=:now'), {'now': now})
+        connection.execute(text('INSERT INTO local_sessions VALUES (:hash,:csrf,:expiry)'),
+                           {'hash': digest(token), 'csrf': csrf, 'expiry': now + 43200})
+    response.set_cookie(LOCAL_COOKIE, token, httponly=True, samesite='strict', max_age=43200, path='/')
+    return {'csrf_token': csrf, 'expires_at': now + 43200}
+
+
+def local_session(request: Request):
+    row = session_row(request, 'local_sessions', LOCAL_COOKIE)
+    if not row:
+        raise HTTPException(401, '로컬 세션을 다시 열어주세요')
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         if not secrets.compare_digest(request.headers.get("x-csrf-token", ""), row["csrf_token"]):
             raise HTTPException(403, "요청 검증에 실패했습니다")
     return dict(row)
+
+
+def owner_session(request: Request):
+    if not has_owner(request):
+        raise HTTPException(401, '로컬 소유자 인증이 필요합니다')
+    return local_session(request)

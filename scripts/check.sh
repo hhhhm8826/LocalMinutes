@@ -28,7 +28,7 @@ case "$mode" in
     .venv/bin/ruff check src tests
     .venv/bin/pytest -m 'not model and not live_codex and not slow'
     web_check
-    .venv/bin/python scripts/check-evidence.py
+    .venv/bin/python scripts/check-evidence.py --profile m2 --manifest .workflow/evidence/m2/execution-index.json
     ;;
   *) printf '%s\n' "검사 모드 미구현: $mode" >&2; exit 2 ;;
 esac

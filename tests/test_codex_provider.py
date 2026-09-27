@@ -11,6 +11,19 @@ from meeting_minutes.minutes_validation import text_payload, validate_minutes
 from meeting_minutes.settings import Settings
 
 
+def test_strict_schema_preserves_properties_named_title_and_default():
+    from meeting_minutes.documents import GeneratedMeeting, GeneratedVideo
+    for model, topic in [(GeneratedMeeting, 'GeneratedTopic'), (GeneratedVideo, 'GeneratedVideoTopic')]:
+        schema = strict_schema(model.model_json_schema())
+        properties = schema['$defs'][topic]['properties']
+        assert 'title' in properties and 'title' in schema['$defs'][topic]['required']
+        assert 'title' not in properties['title']
+    schema = strict_schema({'type': 'object', 'title': 'annotation', 'properties': {
+        'title': {'type': 'string', 'title': 'annotation'}, 'default': {'type': 'string', 'default': 'value'}}})
+    assert set(schema['properties']) == {'title', 'default'}
+    assert set(schema['required']) == {'title', 'default'}
+
+
 def example():
     meeting = {'title': '가상 회의', 'language': 'ko', 'allow_external_text': True,
                'occurred_at': '2026-09-27T10:00:00+09:00', 'timezone': 'Asia/Seoul'}

@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 
 
-SCRIPTS = ('install-ubuntu.sh', 'setup-toolchain.py', 'run.sh', 'stop.sh', 'backup.sh', 'restore.sh',
+SCRIPTS = ('install-ubuntu.sh', 'setup-toolchain.py', 'setup-youtube.py', 'run.sh', 'stop.sh', 'backup.sh', 'restore.sh',
            'doctor.sh', 'login-codex.sh', 'prepare-models.sh', 'install-service.sh', 'dev-windows.ps1',
            'check.sh', 'check-evidence.py', 'check-costly.py', 'check-line-endings.py', 'build-release.py', 'verify_dispatch.py', 'consume-review-acks.py')
 REQUIRED = ('README.md', 'AGENTS.md', '.gitattributes', '.editorconfig', 'docs/milestone.md', 'docs/workflow.md',

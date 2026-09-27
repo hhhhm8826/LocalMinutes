@@ -35,7 +35,7 @@ class Stage(StrEnum):
 
 
 class MeetingCreate(Contract):
-    title: str = Field(min_length=1, max_length=200)
+    title: str = Field(default="", max_length=200)
     occurred_at: datetime | None = None
     timezone: str = "Asia/Seoul"
     language: Literal["ko", "en", "auto"] = "auto"
@@ -115,9 +115,15 @@ class UndoTranscript(Contract):
     type: Literal['undo']
 
 
+class EditUtterance(Contract):
+    type: Literal['utterance_text']
+    utterance_id: str = Field(min_length=1, max_length=80)
+    text: str = Field(max_length=20000)
+
+
 class TranscriptEdit(Contract):
     expected_revision: int = Field(ge=1)
-    operation: Annotated[RenameSpeaker | ReassignSegments | MergeSpeakers | EditText | UndoTranscript,
+    operation: Annotated[EditUtterance | UndoTranscript,
                          Field(discriminator='type')]
 
 

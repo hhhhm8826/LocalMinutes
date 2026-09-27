@@ -7,6 +7,7 @@ import time
 from sqlalchemy import text
 
 from .repository import Conflict, Missing, identifier
+from .utterances import derive_utterances
 
 
 def intersection(a, b, c, d):
@@ -95,8 +96,15 @@ def current_transcript(repository, meeting_id, version=None):
                                  {'id': version or meeting['transcript_version'], 'meeting': meeting_id}).mappings().first()
     if not row:
         raise Missing('TRANSCRIPT_NOT_FOUND')
+    content = json.loads(row['content_json'])
+    try:
+        reading = derive_utterances(content, row['id'])
+        reading_error = None
+    except ValueError as exc:
+        reading, reading_error = None, str(exc)
     return {'id': row['id'], 'meeting_revision': meeting['revision'], 'kind': row['kind'],
-            'parent_id': row['parent_id'], 'content': json.loads(row['content_json'])}
+            'parent_id': row['parent_id'], 'content': content,
+            'reading': reading, 'reading_error': reading_error}
 
 
 def list_transcripts(repository, meeting_id):
@@ -127,6 +135,15 @@ def edit_transcript(repository, meeting_id, expected_revision, operation):
                                         {'id': undo_version}).mappings().one()
             content = json.loads(parent['content_json'])
             content['undo_version_id'] = content.get('undo_version_id', parent['parent_id'])
+        elif action == 'utterance_text':
+            reading = derive_utterances(content, previous['id'])
+            selected = next((u for u in reading['utterances'] if u['id'] == operation['utterance_id']), None)
+            if selected is None:
+                raise Conflict('INVALID_UTTERANCE')
+            if not isinstance(operation['text'], str) or len(operation['text']) > 20000:
+                raise Conflict('INVALID_TEXT')
+            edits = [e for e in content.get('utterance_edits', []) if e['source_ids'] != selected['source_ids']]
+            content['utterance_edits'] = edits + [{'source_ids': selected['source_ids'], 'text': operation['text']}]
         elif action == 'rename':
             speaker = operation['speaker_id']
             name = operation['name'].strip()

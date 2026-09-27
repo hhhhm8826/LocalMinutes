@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from meeting_minutes.codex_provider import CodexFailure, strict_schema
 from meeting_minutes.contracts import Minutes
+from meeting_minutes.documents import GeneratedMeeting
 from meeting_minutes.minutes_context import compact, context_budget, render_prompt, split_payload
 from meeting_minutes.minutes_long import CandidateBatch, generate_minutes
 from meeting_minutes.minutes_validation import text_payload
@@ -58,7 +59,7 @@ def test_long_pipeline_keeps_reversal_evidence_and_reuses_finished_chunks(contex
             ids = [segment['id'] for segment in value['segments']]
             assert ids == ['s0000', 's0034']
             assert [item['kind'] for batch in value['candidate_batches'] for item in batch['items']] == ['decision', 'reversal']
-            return Minutes(meeting_id='m', transcript_version='v', revision=1, summary='배포를 취소하고 점검만 한다.', topics=[],
+            return GeneratedMeeting(meeting_id='m', transcript_version='v', revision=1, summary='배포를 취소하고 점검만 한다.', topics=[],
                 decisions=[{'id': 'd1', 'text': '배포 취소', 'source_segment_ids': ['s0034']}],
                 action_items=[], open_questions=[], review_notes=[]).model_dump(), {}
     result = generate_minutes(repo, settings, job, Provider(), payload, meeting)

@@ -9,6 +9,7 @@ import uvicorn
 
 from meeting_minutes.api import create_app
 from meeting_minutes.contracts import MeetingCreate, Minutes
+from meeting_minutes.documents import MeetingDocument, VideoDocument, DocumentMetadata, Topic, TopicStart
 from meeting_minutes.minutes_storage import save_minutes
 from meeting_minutes.repository import Repository
 from meeting_minutes.security import prepare_owner_key
@@ -40,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix='minutes-browser-') as directory:
         'segments': [{'id': 's1', 'text': '금요일 배포를 제안합니다.', 'start_ms': 0, 'end_ms': 1000, 'speaker_id': 'A'},
                      {'id': 's2', 'text': '배포를 취소하고 내일 검토합시다. 담당자는 미정입니다.', 'start_ms': 2000, 'end_ms': 4000, 'speaker_id': 'B'}]})
     content = Minutes(meeting_id=meeting['id'], transcript_version=transcript, revision=1, summary='배포를 취소하고 검토하기로 했다.',
-        topics=[], decisions=[{'id': 'd1', 'text': '배포 취소', 'source_segment_ids': ['s2']}],
+        topics=[{'id': 't1', 'text': '배포 제안과 취소', 'source_segment_ids': ['s2']}], decisions=[{'id': 'd1', 'text': '배포 취소', 'source_segment_ids': ['s2']}],
         action_items=[{'id': 'a1', 'task': '검토', 'owner_speaker_id': None, 'due_date': None,
                        'due_date_original_expression': '내일', 'source_segment_ids': ['s2']}], open_questions=[], review_notes=[])
     save_minutes(repo, job, content, None)
@@ -50,5 +51,30 @@ with tempfile.TemporaryDirectory(prefix='minutes-browser-') as directory:
             {'id': 'fixture-audio', 'job': job['id'], 'stage': 'EXTRACT', 'attempt': job['attempt_id'],
              'input': 'fixture', 'path': 'fixture-audio.wav', 'sha': hashlib.sha256(audio).hexdigest(), 'now': time.time()})
     repo.finish(job['id'], job['attempt_id'], 'COMPLETED')
+    expired = repo.create_meeting(MeetingCreate(title='원문 만료 회의'))
+    expired_document = MeetingDocument(meeting_id=expired['id'], transcript_version='expired-source', revision=1,
+        metadata=DocumentMetadata(title=expired['title']), summary='원문 없이 보존된 회의록',
+        topics=[Topic(id='expired-topic', title='보존된 논제', text='이 결과와 시각은 영구 보존한다.',
+                      starts=[TopicStart(start_ms=3601000, end_ms=3605000, utterance_ids=['expired-utterance'])])],
+        decisions=[], action_items=[], open_questions=[], review_notes=[])
+    with repo.write() as connection:
+        connection.execute(text('''INSERT INTO minutes_revisions VALUES
+            ('expired-result',:meeting,NULL,NULL,:content,:now)'''),
+            {'meeting': expired['id'], 'content': expired_document.model_dump_json(), 'now': time.time()})
+        connection.execute(text("UPDATE meetings SET minutes_revision='expired-result',media_expired_at=1,transcript_expired_at=1 WHERE id=:id"),
+                           {'id': expired['id']})
+    video = repo.create_meeting(MeetingCreate(title='원문 만료 영상'), document_kind='video_summary')
+    video_document = VideoDocument(meeting_id=video['id'], transcript_version=None, revision=1,
+        metadata=DocumentMetadata(title=video['title'], source_kind='youtube',
+            source_url='https://www.youtube.com/watch?v=AbCde_123-4', channel='시험 채널'),
+        summary='발표자가 매출과 전망을 설명했다.',
+        topics=[Topic(id='video-topic', title='매출 전망', text='발표자의 예측이며 독립 사실 확인은 수행하지 않았다.',
+                      starts=[TopicStart(start_ms=3601000, end_ms=3605000, utterance_ids=['video-source'])])],
+        claims=[{'text': '작년 매출 30억 원', 'attribution': '발표자', 'kind': 'number'}])
+    with repo.write() as connection:
+        connection.execute(text("INSERT INTO minutes_revisions VALUES ('video-result',:meeting,NULL,NULL,:content,:now)"),
+                           {'meeting': video['id'], 'content': video_document.model_dump_json(), 'now': time.time()})
+        connection.execute(text("UPDATE meetings SET minutes_revision='video-result',media_expired_at=1,transcript_expired_at=1 WHERE id=:id"),
+                           {'id': video['id']})
     engine.dispose()
     uvicorn.run(create_app(settings), host='127.0.0.1', port=8877, access_log=False)

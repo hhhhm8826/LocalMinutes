@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from .codex_provider import CodexFailure, INSTRUCTIONS, strict_schema
 from .contracts import Contract, Minutes
+from .minutes_generation import generation_model, validate_generation
 from .minutes_calls import call_with_retries
 from .minutes_context import FORMAT_VERSION, TASKS, context_budget, render_prompt, split_payload
 from .minutes_validation import validate_minutes
@@ -17,7 +18,7 @@ from .speech_pipeline import cached_checkpoint, checkpoint, fingerprint
 
 class Candidate(Contract):
     id: str = Field(min_length=1, max_length=80)
-    kind: Literal['topic', 'proposal', 'decision', 'reversal', 'action', 'open_question']
+    kind: Literal['topic', 'proposal', 'decision', 'reversal', 'resolution', 'action', 'open_question', 'number', 'claim', 'opinion', 'prediction']
     text: str = Field(min_length=1, max_length=6000)
     source_segment_ids: list[str] = Field(min_length=1, max_length=100)
     owner_speaker_id: str | None = None
@@ -43,7 +44,8 @@ def validate_candidates(value, payload, meeting):
         action_items=[{'id': item.id, 'task': item.text, 'source_segment_ids': item.source_segment_ids,
                        'owner_speaker_id': item.owner_speaker_id, 'due_date': item.due_date,
                        'due_date_original_expression': item.due_date_original_expression} for item in result.items])
-    validate_minutes(wrapper.model_dump(), payload, meeting)
+    validate_minutes(wrapper.model_dump(), payload, {key: value for key, value in meeting.items()
+                     if key not in {'document_kind', 'source_kind', 'source_metadata'}})
     return result.model_dump()
 
 
@@ -60,13 +62,13 @@ def remaining_calls(repository, job, maximum):
 
 
 def generate_minutes(repository, settings, job, provider, payload, meeting):
-    schema = Minutes.model_json_schema()
+    schema = generation_model(payload).model_json_schema()
     budget = context_budget(settings, strict_schema(schema))
     full_size = len(render_prompt(payload).encode())
     if full_size <= budget['max_prompt_bytes']:
         inputs = call_inputs(payload, schema, settings)
         return call_with_retries(repository, settings, job, provider, payload, schema,
-            lambda value: validate_minutes(value, payload, meeting).model_dump(), fingerprint(inputs))
+            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs))
     candidate_schema = CandidateBatch.model_json_schema()
     candidate_budget = context_budget(settings, strict_schema(candidate_schema))
     chunks = split_payload(payload, candidate_budget)
@@ -98,5 +100,5 @@ def generate_minutes(repository, settings, job, provider, payload, meeting):
         raise CodexFailure('CODEX_JOB_CALL_BUDGET_REQUIRED')
     def integrate():
         return call_with_retries(repository, settings, job, provider, integration, schema,
-            lambda value: validate_minutes(value, integration, meeting).model_dump(), fingerprint(inputs))
+            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs))
     return checkpoint(repository, settings, job, 'SUMMARIZE', inputs, integrate)

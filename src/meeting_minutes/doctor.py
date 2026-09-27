@@ -5,21 +5,24 @@ import shutil
 
 from .diagnostics import model_cache, runtime_status
 from .settings import Settings
+from .youtube_sandbox import youtube_readiness
 
 
 def main():
     settings = Settings()
     runtime, models = runtime_status(settings), model_cache(settings)
+    youtube = youtube_readiness(settings)
     checks = {'linux_x86_64': platform.system() == 'Linux' and platform.machine() == 'x86_64',
               'python_312': platform.python_version_tuple()[:2] == ('3', '12'),
               'ffmpeg': shutil.which('ffmpeg') is not None, 'ffprobe': shutil.which('ffprobe') is not None,
               'database_exists': settings.database_path.is_file(),
               'model_files_present': all(model['files_present'] for model in models['models']),
               'runtime_login': runtime['login'] == 'chatgpt', 'runtime_version': runtime['version'] == '0.157.1',
-              'runtime_model_catalog': runtime['configured_model_in_local_catalog'] is True}
+              'runtime_model_catalog': runtime['configured_model_in_local_catalog'] is True,
+              'youtube_tools_and_isolation': youtube['ready']}
     ready = all(checks.values())
     print(json.dumps({'status': 'LOCAL_CHECKS_PASS' if ready else 'PREPARATION_REQUIRED', 'checks': checks,
-                      'data_dir': str(settings.data_dir), 'runtime': runtime, 'models': models,
+                      'data_dir': str(settings.data_dir), 'runtime': runtime, 'models': models, 'youtube': youtube,
                       'inference_tested': False, 'remote_generation_tested': False}, ensure_ascii=False, indent=2))
     raise SystemExit(0 if ready else 2)
 

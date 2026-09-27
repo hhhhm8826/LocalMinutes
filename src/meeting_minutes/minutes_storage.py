@@ -65,7 +65,13 @@ def save_minutes(repository, job, result, base_minutes_id):
         connection.execute(text('UPDATE jobs SET minutes_result_id=:result WHERE id=:id'),
                            {'id': job['id'], 'result': new_id})
         # Generated old snapshots remain available, but cannot replace newer owner edits.
-        if meeting['minutes_revision'] == base_minutes_id and meeting['transcript_version'] == value.transcript_version:
+        if (meeting['minutes_revision'] == base_minutes_id
+                and meeting['transcript_version'] == value.transcript_version):
             connection.execute(text('''UPDATE meetings SET minutes_revision=:version,revision=revision+1,updated_at=:now
                 WHERE id=:id'''), {'id': job['meeting_id'], 'version': new_id, 'now': now})
+            options = json.loads(meeting['settings_json'])
+            if not options.get('title') and hasattr(value, 'metadata'):
+                options['title'] = value.metadata.title
+                connection.execute(text('UPDATE meetings SET title=:title,settings_json=:options WHERE id=:id'),
+                    {'id': job['meeting_id'], 'title': value.metadata.title, 'options': json.dumps(options, ensure_ascii=False)})
     return {'id': new_id, 'content': value.model_dump()}

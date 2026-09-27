@@ -25,6 +25,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (options.method && options.method !== 'GET') headers.set('X-CSRF-Token', csrf)
   const response = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin' })
   const body = await response.json()
+  if (response.status === 401 && (path.startsWith('/settings') || path.startsWith('/diagnostics'))) {
+    window.dispatchEvent(new Event('minutes-owner-expired'))
+  }
   if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : '요청을 처리하지 못했습니다.')
   return body as T
 }

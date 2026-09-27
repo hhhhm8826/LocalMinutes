@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     max_duration_seconds: int = Field(default=7200, ge=1, le=7200)
     threads: int = Field(default=4, ge=1, le=16)
     worker_enabled: bool = True
+    youtube_deno: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'toolchain/deno-2.9.7/deno')
+    youtube_bwrap: Path = Field(default_factory=lambda: Path('/usr/bin/bwrap') if Path('/usr/bin/bwrap').is_file()
+                               else user_path('XDG_DATA_HOME', '.local/share') / 'toolchain/bubblewrap/unpacked/usr/bin/bwrap')
     codex_cli: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') /
                            'toolchain/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex')
     codex_home: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'codex-home')
@@ -32,7 +35,7 @@ class Settings(BaseSettings):
     codex_input_bytes: int = Field(default=150000, ge=1000, le=1000000)
     codex_max_calls: int = Field(default=10, ge=1, le=30)
 
-    @field_validator("data_dir", "config_dir", "cache_dir", "web_dir", "codex_cli", "codex_home", "codex_user_home")
+    @field_validator("data_dir", "config_dir", "cache_dir", "web_dir", "codex_cli", "codex_home", "codex_user_home", "youtube_deno", "youtube_bwrap")
     @classmethod
     def absolute_path(cls, value):
         if value is None:

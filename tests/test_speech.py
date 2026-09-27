@@ -79,7 +79,7 @@ def test_transcript_api_auth_schema_conflict_and_undo(context):  # noqa: F811
     register(context)
     job = repo.claim()
     original = {'speakers': {'A': {'name': '화자 1', 'user_verified': False}},
-                'segments': [{'id': 's1', 'text': '원문', 'speaker_id': 'A'}], 'merge_candidates': []}
+                'segments': [{'id': 's1', 'text': '원문', 'speaker_id': 'A', 'start_ms': 0, 'end_ms': 1000}], 'merge_candidates': []}
     save_original(repo, job, original)
     path = f'/api/meetings/{job["meeting_id"]}/transcript'
     with TestClient(create_app(settings), base_url=settings.origin) as client:
@@ -89,16 +89,22 @@ def test_transcript_api_auth_schema_conflict_and_undo(context):  # noqa: F811
         headers['x-csrf-token'] = login.json()['csrf_token']
         current = client.get(path).json()
         payload = {'expected_revision': current['meeting_revision'],
-                   'operation': {'type': 'rename', 'speaker_id': 'A', 'name': '발표자'}}
+                   'operation': {'type': 'utterance_text', 'utterance_id': current['reading']['utterances'][0]['id'], 'text': '교정문'}}
         assert client.post(path + '/edits', headers={'origin': settings.origin}, json=payload).status_code == 403
         edited = client.post(path + '/edits', headers=headers, json=payload)
-        assert edited.status_code == 200 and edited.json()['content']['speakers']['A']['name'] == '발표자'
+        assert edited.status_code == 200 and edited.json()['reading']['utterances'][0]['text'] == '교정문'
+        assert edited.json()['content']['segments'] == original['segments']
+        assert repo.meetings('교정문') and not repo.meetings('원문')
         assert client.post(path + '/edits', headers=headers, json=payload).status_code == 409
-        payload['operation'] = {'type': 'merge', 'speaker_id': 'A'}
-        assert client.post(path + '/edits', headers=headers, json=payload).status_code == 422
+        for operation in [{'type': 'merge', 'speaker_id': 'A', 'source_speaker_id': 'B'},
+                          {'type': 'rename', 'speaker_id': 'A', 'name': '발표자'},
+                          {'type': 'reassign', 'speaker_id': 'A', 'segment_ids': ['s1']}]:
+            payload['operation'] = operation
+            assert client.post(path + '/edits', headers=headers, json=payload).status_code == 422
         payload = {'expected_revision': edited.json()['meeting_revision'], 'operation': {'type': 'undo'}}
         restored = client.post(path + '/edits', headers=headers, json=payload)
         assert restored.status_code == 200 and restored.json()['content']['speakers'] == original['speakers']
+        assert restored.json()['reading']['utterances'][0]['text'] == '원문'
         payload['expected_revision'] = restored.json()['meeting_revision']
         assert client.post(path + '/edits', headers=headers, json=payload).status_code == 409
 
