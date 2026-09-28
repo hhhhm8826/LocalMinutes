@@ -5,7 +5,7 @@ mode=${1:-fast}
 shift || true
 web_check() {
   source "${XDG_DATA_HOME:-$HOME/.local/share}/local-meeting-minutes/toolchain/env.sh"
-  (cd apps/web && npm run check && ./node_modules/.bin/playwright test "$@")
+  (cd apps/web && npm run build && ./node_modules/.bin/playwright test "$@")
 }
 case "$mode" in
   fast)
@@ -28,7 +28,7 @@ case "$mode" in
     .venv/bin/ruff check src tests
     .venv/bin/pytest -m 'not model and not live_codex and not slow'
     web_check
-    .venv/bin/python scripts/check-evidence.py --profile m2 --manifest .workflow/evidence/m2/execution-index.json
+    .venv/bin/python scripts/check-evidence.py --profile m3 --manifest .workflow/evidence/m3/execution-index.json
     ;;
   *) printf '%s\n' "검사 모드 미구현: $mode" >&2; exit 2 ;;
 esac

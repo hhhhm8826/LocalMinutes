@@ -192,3 +192,18 @@ node_modules/
 # Browser test output
 apps/web/test-results/
 apps/web/playwright-report/
+
+# External AI credentials (all depths)
+.apikey/
+.claude/
+claude-home/
+claude-user-home/
+codex-home/
+runtime-user-home/
+
+# Owner-provided Gemini import file
+.gemini_api_key
+
+# Claude standalone runtime state and backups (all depths)
+.claude.json
+.claude.json.*

@@ -6,7 +6,7 @@ from test_minutes_management import ready
 from test_queue_media import context, register  # noqa: F401
 
 
-def setup_lanes(context):
+def setup_lanes(context):  # noqa: F811
     settings, repo = context
     meeting, version = ready(context)
     register(context)

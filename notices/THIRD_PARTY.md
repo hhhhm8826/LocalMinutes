@@ -6,7 +6,7 @@
 
 Python 의존성의 버전·배포처·해시는 `uv.lock`, 직접 의존성은 `pyproject.toml`에 고정되어 있습니다. WhisperX, PyTorch/torchaudio/torchvision, CTranslate2, faster-whisper, pyannote.audio 등은 설치 시 배포 패키지의 라이선스·고지를 함께 받습니다. FFmpeg는 Ubuntu 시스템 패키지로 별도 설치합니다.
 
-새 고정 런타임 설치에서 읽은 122개 Python 의존성의 버전·라이선스 메타데이터·라이선스 파일 목록은 `PYTHON_DEPENDENCIES.json`에 있습니다. 메타데이터가 비어 있으면 이용 허가를 뜻하지 않으며 해당 배포처의 조건을 확인해야 합니다.
+기존 설치와 M3의 고정 SDK 설치에서 읽은 Python 의존성의 버전·라이선스 메타데이터·라이선스 파일 목록은 `PYTHON_DEPENDENCIES.json`에 있습니다. 메타데이터가 비어 있으면 이용 허가를 뜻하지 않으며 해당 배포처의 조건을 확인해야 합니다.
 
 모델 카드의 고정 리비전에서 확인한 라이선스 필드는 다음과 같습니다. 가중치는 재배포하지 않습니다.
 
@@ -34,3 +34,11 @@ pyannote 모델은 소유자가 Hugging Face 모델 페이지의 사용조건·�
 Python 배포물은 `uv.lock`, Deno 아카이브 SHA-256은 `scripts/setup-youtube.py`로 고정합니다. 도구는 설치 시 원 배포처에서 받고 앱 소스 번들에 실행 파일을 넣지 않습니다. 설치된 Python 배포물의 `dist-info/licenses`, bubblewrap의 `usr/share/doc/bubblewrap/copyright`, [Deno 라이선스](https://github.com/denoland/deno/blob/v2.9.7/LICENSE.md)를 함께 확인하세요. EJS에 포함된 MIT/ISC 구성요소 고지는 해당 배포 소스의 고지를 따릅니다.
 
 공개 YouTube URL은 재사용 허가를 보장하지 않습니다. 소유하거나 재사용·처리가 허용된 영상만 입력하며 로그인·유료·지역 제한을 우회하지 않습니다. 모델 입력에는 획득한 음성의 전사를 사용하고 썸네일·자막으로 대체하지 않습니다.
+
+## Gemini API SDK
+
+공식 `google-genai` 2.25.0과 추가 의존성은 `uv.lock`으로 고정합니다. 설치된 SDK의 라이선스 메타데이터는 Apache-2.0이며 상세 의존성 고지는 `PYTHON_DEPENDENCIES.json`에 포함합니다. SDK 라이선스와 Gemini 서비스의 데이터 처리·과금 조건은 별개입니다. 실제 이용 전에 [Gemini API 서비스 조건](https://ai.google.dev/gemini-api/terms)을 확인해야 합니다.
+
+## 선택적 Claude 런타임
+
+공식 `@anthropic-ai/claude-code-linux-x64` 2.1.283 실행 파일은 소스 번들에 포함하지 않습니다. `scripts/setup-claude.py`가 고정 공개 배포 URL과 SHA-512를 검증해 사용자 도구 폴더에 설치합니다. 사용에는 별도의 Claude 구독과 [공식 사용 조건](https://code.claude.com/docs/en/legal-and-compliance)이 적용됩니다.

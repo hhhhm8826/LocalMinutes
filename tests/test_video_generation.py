@@ -100,7 +100,7 @@ def test_video_queue_snapshot_publishes_summary_and_rejects_edit_confirm(context
             assert 'claims' in schema['properties'] and 'decisions' not in schema['properties']
             return GeneratedVideo(meeting_id=meeting['id'], transcript_version=version, revision=payload['revision'],
                 summary='영상에서 논의한 내용을 요약한다.', topics=[], claims=[]).model_dump(), {}
-    monkeypatch.setattr('meeting_minutes.minutes_pipeline.CodexCliProvider', Provider)
+    monkeypatch.setattr('meeting_minutes.ai_runtime.CodexCliProvider', Provider)
     assert run_minutes(repo, settings, job) == ('COMPLETED', None)
     assert run_minutes(repo, settings, job) == ('COMPLETED', None)
     assert len(calls) == 1
@@ -110,7 +110,8 @@ def test_video_queue_snapshot_publishes_summary_and_rejects_edit_confirm(context
     with pytest.raises(Conflict):
         edit_minutes(repo, meeting['id'], document['id'], document['meeting_revision'], confirm=True)
     exported = export_minutes(repo, meeting['id'])
-    assert '영상에서 논의한 내용을 요약한다' in exported and '요약본' in exported
+    assert '영상에서 논의한 내용을 요약한다' in exported and '## 요약' in exported
+    assert '버전 1' not in exported
 
 
 def test_long_video_extract_integrate_keeps_kind_and_reuses_checkpoints(context):  # noqa: F811

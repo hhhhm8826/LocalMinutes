@@ -124,7 +124,7 @@ def test_provider_keeps_secrets_and_source_out_of_argv_and_requires_complete_sch
         assert payload['segments'][0]['text'] in kwargs['input_bytes'].decode()
         assert reservations == ['reserved']
         kwargs['result_path'].write_text(json.dumps(result))
-        return 0, b'{"type":"turn.completed","usage":{"input_tokens":10}}', b''
+        return 0, b'{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":20}}', b''
     monkeypatch.setattr('meeting_minutes.codex_provider.bounded_cli', runner)
     provider = CodexCliProvider(settings)
     received, metrics = provider.generate(payload, Minutes.model_json_schema(), lambda: reservations.append('reserved'))
@@ -147,3 +147,23 @@ def test_cli_state_growth_does_not_relax_result_limit(tmp_path):
         bounded_cli([sys.executable, '-c',
                      "from pathlib import Path; import time; Path('result.json').write_bytes(b'x'*1_000_001); time.sleep(2)"],
                     cwd=tmp_path, env=os.environ.copy(), timeout=5, result_path=result)
+
+
+@pytest.mark.parametrize('tokens, rejected', [(64, False), (65, False), (None, True), (True, True), (-1, True)])
+def test_output_usage_required_but_over_reserve_result_kept(tmp_path, monkeypatch, tokens, rejected):
+    from types import SimpleNamespace
+    settings = Settings(codex_home=tmp_path / 'auth', codex_user_home=tmp_path / 'home')
+    provider = CodexCliProvider(settings)
+    provider.runtime = SimpleNamespace(budget=lambda schema: {
+        'max_prompt_bytes': 10000, 'output_reserve_tokens': 64})
+    monkeypatch.setattr(provider, 'preflight', lambda *args: None)
+    def run(argv, **kwargs):
+        kwargs['result_path'].write_text('{"summary":"small"}')
+        return 0, json.dumps({'type':'turn.completed', 'usage':{'output_tokens':tokens}}).encode(), b''
+    monkeypatch.setattr('meeting_minutes.codex_provider.bounded_cli', run)
+    schema = {'type':'object','properties':{'summary':{'type':'string'}},'required':['summary']}
+    if rejected:
+        with pytest.raises(CodexFailure, match='CODEX_OUTPUT_LIMIT|CODEX_PROTOCOL_ERROR'):
+            provider.generate({'segments':[]}, schema, lambda: None)
+    else:
+        assert provider.generate({'segments':[]}, schema, lambda: None)[0]['summary'] == 'small'

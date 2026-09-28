@@ -109,7 +109,7 @@ def test_regeneration_does_not_replace_edits_saved_during_generation(context):  
         transcript_version=version, allow_external_text=True), 'race-first-fixture')
     original = complete(repo, job, version)
     record = read_minutes(repo, meeting['id'])
-    queued = queue_generation(repo, settings, meeting['id'], GenerateMinutes(expected_revision=record['meeting_revision'],
+    queue_generation(repo, settings, meeting['id'], GenerateMinutes(expected_revision=record['meeting_revision'],
         transcript_version=version, allow_external_text=True,new_draft=True),'race-second-fixture')
     active = repo.claim('summary')
     edited = MeetingDocument.model_validate(record['document'])

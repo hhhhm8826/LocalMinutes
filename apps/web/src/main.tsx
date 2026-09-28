@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { api, setCsrf } from './api'
 import './style.css'
 import { Library } from './Library'
+import { AISettings, AIStatus } from './AISettings'
 import { RetentionSettings } from './RetentionSettings'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { confirmNavigation } from './unsaved'
@@ -46,6 +47,7 @@ function App() {
     } catch (e) { setError((e as Error).message) } finally { setLoading(false) }
   }
   async function logout() {
+    window.dispatchEvent(new Event('minutes-clear-secrets'))
     setError('')
     try {
       const result = await api<Session>('/auth/logout', { method: 'POST' })
@@ -63,11 +65,11 @@ function App() {
       <div className="privacy"><span className="status-dot"/> 내 컴퓨터에서 전사<small>음성 파일은 외부로 보내지 않습니다.</small></div>
     </aside>
     <main>
-      <header><span>나의 작업 공간</span><div className="header-actions"><span className="local-badge">LOCAL · CPU</span>{owner && <button className="secondary" onClick={() => void logout()}>로그아웃</button>}</div></header>
+      <header><span>나의 작업 공간</span><div className="header-actions">{ready && <AIStatus />}<span className="local-badge">LOCAL · CPU</span>{owner && <button className="secondary" onClick={() => void logout()}>로그아웃</button>}</div></header>
       <section className="page">
         {!ready ? <p role="status">로컬 작업 공간을 여는 중입니다.</p> : tab === 'meetings' ? <Library key='meetings' /> : tab === 'videos' ? <Library key='videos' kind='video_summary' /> : owner ? <>
           <span className="eyebrow">WORKSPACE SETTINGS</span><h1>설정 및 진단</h1>
-          <RetentionSettings /><DiagnosticsPanel />
+          <AISettings /><RetentionSettings /><DiagnosticsPanel />
         </> : <div className="login-card"><h1>설정 로그인</h1><p>설정과 진단은 이 컴퓨터의 소유자 키로 엽니다. 일반 회의 작업은 키 없이 사용할 수 있습니다.</p>
           <form onSubmit={login}><label htmlFor="owner-key">소유자 키</label><input id="owner-key" type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} required />
             <button className="primary" disabled={loading || !key}>{loading ? '확인 중…' : '설정 열기'}</button></form>

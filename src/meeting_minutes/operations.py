@@ -16,6 +16,7 @@ import time
 
 import psutil
 
+from .private_paths import private_path
 from .settings import Settings
 from .process_identity import matches
 
@@ -81,6 +82,8 @@ def backup(settings, destination):
             target.execute('DELETE FROM owner_sessions')
             if target.execute("SELECT 1 FROM sqlite_master WHERE name='local_sessions'").fetchone():
                 target.execute('DELETE FROM local_sessions')
+            if target.execute("SELECT 1 FROM sqlite_master WHERE name='ai_readiness'").fetchone():
+                target.execute('DELETE FROM ai_readiness')
             target.commit()
             target.execute('VACUUM')
             target.execute('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -98,6 +101,8 @@ def backup(settings, destination):
                 for name in ('media', 'artifacts'):
                     root = settings.data_dir / name
                     for path in root.iterdir():
+                        if private_path(path.relative_to(settings.data_dir)):
+                            raise RuntimeError('인증 자료는 백업하지 않습니다.')
                         if path.is_symlink():
                             raise RuntimeError('심볼릭 링크 자료는 백업하지 않습니다.')
                         if path.is_file() and not path.name.endswith('.part'):
@@ -128,7 +133,7 @@ def restore(source, destination):
             names = set()
             for member in members:
                 path = Path(member.name)
-                if (not member.isfile() or member.name in names or path.is_absolute() or '..' in path.parts
+                if (private_path(member.name) or not member.isfile() or member.name in names or path.is_absolute() or '..' in path.parts
                         or not (member.name in {'minutes.sqlite3', 'manifest.json'} or len(path.parts) == 2 and path.parts[0] in {'media', 'artifacts'})):
                     raise RuntimeError('허용되지 않는 백업 항목입니다.')
                 names.add(member.name)
@@ -165,6 +170,8 @@ def restore(source, destination):
             connection.execute('DELETE FROM owner_sessions')
             if connection.execute("SELECT 1 FROM sqlite_master WHERE name='local_sessions'").fetchone():
                 connection.execute('DELETE FROM local_sessions')
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name='ai_readiness'").fetchone():
+                connection.execute('DELETE FROM ai_readiness')
             connection.commit()
             connection.execute('VACUUM')
             connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')

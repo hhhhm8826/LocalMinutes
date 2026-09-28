@@ -40,10 +40,12 @@ test('만료된 영상은 읽기 전용 요약과 전체 원본 링크와 최신
   await expect(page.locator('textarea')).toHaveCount(0)
   await expect(page.getByLabel('요약본 버전', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('link', { name: '원본 영상', exact: true })).toHaveCount(1)
-  await expect(page.getByText('작년 매출 30억 원', { exact: false })).toBeVisible()
+  await expect(page.getByText('작년 매출 30억 원', { exact: false })).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: '주요 수치·주장·전망' })).toHaveCount(0)
   const response = await page.request.get(await page.getByRole('link', { name: '텍스트 내보내기', exact: true }).getAttribute('href') as string)
   expect(response.status()).toBe(200)
   expect(await response.text()).toContain('발표자가 매출과 전망을 설명했다.')
+  expect(await response.text()).toContain('작년 매출 30억 원')
   expect(await response.text()).not.toContain('버전 1')
 })
 

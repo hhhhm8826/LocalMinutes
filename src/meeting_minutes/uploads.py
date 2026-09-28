@@ -62,7 +62,7 @@ async def receive_locked_upload(request: Request, meeting_id: str, filename: str
         partial.replace(final)
         sync_directory(root)
         request_hash = hashlib.sha256(json.dumps([meeting_id, filename, digest.hexdigest(), size]).encode()).hexdigest()
-        result, created = repository.register_media(meeting_id, filename, name, size, digest.hexdigest(), key, request_hash)
+        result, created = repository.register_media(meeting_id, filename, name, size, digest.hexdigest(), key, request_hash, settings=settings)
         committed = created
         return result
     except OSError as exc:

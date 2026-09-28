@@ -93,7 +93,10 @@ class Repository:
                 {"kind": document_kind, "query": '%' + search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'}).mappings()
             return [dict(row) for row in rows]
 
-    def register_media(self, meeting_id, name, stored_name, size, sha256, key, request_hash):
+    def register_media(self, meeting_id, name, stored_name, size, sha256, key, request_hash, *, settings=None):
+        from .ai_snapshot import capture
+        from .settings import Settings
+        settings = settings or Settings()
         with self.write() as connection:
             if connection.execute(text('SELECT 1 FROM job_requests WHERE key=:key'), {'key': key}).first():
                 raise Conflict('IDEMPOTENCY_CONFLICT')
@@ -119,10 +122,11 @@ class Repository:
                 {"id": media_id, "meeting": meeting_id, "name": name, "stored": stored_name,
                  "size": size, "hash": sha256, "now": now})
             connection.execute(text("""INSERT INTO jobs
-                (id,meeting_id,media_id,kind,state,stage,attempt_id,idempotency_key,request_hash,created_at,updated_at)
-                VALUES (:id,:meeting,:media,'transcribe','QUEUED','VALIDATE',:attempt,:key,:hash,:now,:now)"""),
+                (id,meeting_id,media_id,kind,state,stage,attempt_id,idempotency_key,request_hash,created_at,updated_at,ai_config_json)
+                VALUES (:id,:meeting,:media,'transcribe','QUEUED','VALIDATE',:attempt,:key,:hash,:now,:now,:ai_config)"""),
                 {"id": job_id, "meeting": meeting_id, "media": media_id, "attempt": attempt_id,
-                 "key": key, "hash": request_hash, "now": now})
+                 "key": key, "hash": request_hash, "now": now,
+                 "ai_config": capture(connection, settings, meeting).model_dump_json()})
             return dict(connection.execute(text("SELECT * FROM jobs WHERE id=:id"), {"id": job_id}).mappings().one()), True
 
     def job(self, job_id):
@@ -150,6 +154,15 @@ class Repository:
                 AND (:lane IS NULL OR (:lane='summary' AND j.kind='summarize')
                      OR (:lane='analysis' AND j.kind!='summarize'))
                 ORDER BY j.sequence LIMIT 1"""), {'lane': lane}).mappings().first()
+            if row and row['state'] == 'BLOCKED' and row['blocked_reason'] in {'AI_WEEKLY_BUDGET_EXHAUSTED', 'AI_DAILY_REQUEST_BUDGET_EXHAUSTED', 'AI_REQUEST_RATE_WAIT'}:
+                from .ai_budget import status
+                provider = json.loads(row['ai_config_json'])['provider'] if row['ai_config_json'] else 'codex_cli'
+                if not status(connection, provider)['exhausted']:
+                    connection.execute(text("""UPDATE jobs SET state='QUEUED',attempt_id=:attempt,
+                        attempt_number=attempt_number+1,blocked_reason=NULL,finished_at=NULL,started_at=NULL,
+                        updated_at=:now WHERE id=:id AND cancel_requested=0"""),
+                        {'id':row['id'],'attempt':identifier(),'now':time.time()})
+                    row = connection.execute(text('SELECT * FROM jobs WHERE id=:id'), {'id':row['id']}).mappings().one()
             if not row or row['state'] != 'QUEUED':
                 return None
             connection.execute(text("""UPDATE jobs SET state='RUNNING',started_at=:now,updated_at=:now

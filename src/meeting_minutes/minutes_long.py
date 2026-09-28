@@ -6,11 +6,12 @@ from typing import Literal
 from pydantic import Field, ValidationError
 from sqlalchemy import text
 
-from .codex_provider import CodexFailure, INSTRUCTIONS, strict_schema
+from .ai_common import AIFailure, INSTRUCTIONS
+from .ai_runtime import GenerationRuntime
 from .contracts import Contract, Minutes
 from .minutes_generation import generation_model, validate_generation
 from .minutes_calls import call_with_retries
-from .minutes_context import FORMAT_VERSION, TASKS, context_budget, render_prompt, split_payload
+from .minutes_context import FORMAT_VERSION, TASKS, render_prompt, split_payload
 from .minutes_validation import validate_minutes
 from .repository import identifier
 from .speech_pipeline import cached_checkpoint, checkpoint, fingerprint
@@ -35,9 +36,9 @@ def validate_candidates(value, payload, meeting):
     try:
         result = CandidateBatch.model_validate(value)
     except ValidationError as exc:
-        raise CodexFailure('MINUTES_SCHEMA_INVALID') from exc
+        raise AIFailure('MINUTES_SCHEMA_INVALID') from exc
     if result.chunk_index != payload['chunk_index']:
-        raise CodexFailure('MINUTES_SNAPSHOT_MISMATCH')
+        raise AIFailure('MINUTES_SNAPSHOT_MISMATCH')
     # Reuse the same evidence, owner and date checks as final minutes without inventing prose summaries.
     wrapper = Minutes(meeting_id=payload['meeting_id'], transcript_version=payload['transcript_version'],
         revision=payload['revision'], summary='후보 근거 검증', topics=[], decisions=[], open_questions=[], review_notes=[],
@@ -49,8 +50,10 @@ def validate_candidates(value, payload, meeting):
     return result.model_dump()
 
 
-def call_inputs(payload, schema, settings):
-    return {'payload': fingerprint(payload), 'schema': fingerprint(schema), 'model': settings.codex_model,
+def call_inputs(payload, schema, settings, runtime=None):
+    runtime = runtime or GenerationRuntime(settings)
+    return {'ai_config': runtime.identity(),
+            'payload': fingerprint(payload), 'schema': fingerprint(schema), 'model': runtime.model,
             'prompt': fingerprint([INSTRUCTIONS, TASKS]), 'format_version': FORMAT_VERSION}
 
 
@@ -61,21 +64,22 @@ def remaining_calls(repository, job, maximum):
     return maximum - sum(json.loads(row).get('call_reserved', False) for row in rows)
 
 
-def generate_minutes(repository, settings, job, provider, payload, meeting):
+def generate_minutes(repository, settings, job, provider, payload, meeting, *, runtime=None):
+    runtime = runtime or GenerationRuntime(settings)
     schema = generation_model(payload).model_json_schema()
-    budget = context_budget(settings, strict_schema(schema))
+    budget = runtime.budget(schema)
     full_size = len(render_prompt(payload).encode())
     if full_size <= budget['max_prompt_bytes']:
-        inputs = call_inputs(payload, schema, settings)
+        inputs = call_inputs(payload, schema, settings, runtime)
         return call_with_retries(repository, settings, job, provider, payload, schema,
-            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs))
+            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs), runtime=runtime)
     candidate_schema = CandidateBatch.model_json_schema()
-    candidate_budget = context_budget(settings, strict_schema(candidate_schema))
+    candidate_budget = runtime.budget(candidate_schema)
     chunks = split_payload(payload, candidate_budget)
-    chunk_inputs = [call_inputs(chunk, candidate_schema, settings) for chunk in chunks]
+    chunk_inputs = [call_inputs(chunk, candidate_schema, settings, runtime) for chunk in chunks]
     missing = sum(not cached_checkpoint(repository, settings, job, 'SUMMARIZE', inputs)[0] for inputs in chunk_inputs)
-    if missing and missing + 1 > remaining_calls(repository, job, settings.codex_max_calls):
-        raise CodexFailure('CODEX_JOB_CALL_BUDGET_REQUIRED')
+    if missing and missing + 1 > remaining_calls(repository, job, runtime.max_calls):
+        raise AIFailure('CODEX_JOB_CALL_BUDGET_REQUIRED')
     with repository.write() as connection:
         repository.assert_current(connection, job)
         connection.execute(text("INSERT INTO usage_records VALUES (:id,:job,:attempt,'SUMMARIZE',:metrics,:now)"),
@@ -88,17 +92,17 @@ def generate_minutes(repository, settings, job, provider, payload, meeting):
         repository.stage(job, 'SUMMARIZE', {'chunk': chunk['chunk_index'] + 1, 'chunks': len(chunks)})
         def extract(chunk=chunk, inputs=inputs):
             return call_with_retries(repository, settings, job, provider, chunk, candidate_schema,
-                lambda value: validate_candidates(value, chunk, meeting), fingerprint(inputs))
+                lambda value: validate_candidates(value, chunk, meeting), fingerprint(inputs), runtime=runtime)
         batches.append(checkpoint(repository, settings, job, 'SUMMARIZE', inputs, extract))
     referenced = {source for batch in batches for item in batch['items'] for source in item['source_segment_ids']}
     integration = dict(payload, generation_mode='integrate', evidence_layout='references', candidate_batches=batches,
                        segments=[segment for segment in payload['segments'] if segment['id'] in referenced])
     if len(render_prompt(integration).encode()) > budget['max_prompt_bytes']:
-        raise CodexFailure('CODEX_INTEGRATION_BUDGET_REQUIRED')
-    inputs = call_inputs(integration, schema, settings)
-    if not cached_checkpoint(repository, settings, job, 'SUMMARIZE', inputs)[0] and remaining_calls(repository, job, settings.codex_max_calls) < 1:
-        raise CodexFailure('CODEX_JOB_CALL_BUDGET_REQUIRED')
+        raise AIFailure('CODEX_INTEGRATION_BUDGET_REQUIRED')
+    inputs = call_inputs(integration, schema, settings, runtime)
+    if not cached_checkpoint(repository, settings, job, 'SUMMARIZE', inputs)[0] and remaining_calls(repository, job, runtime.max_calls) < 1:
+        raise AIFailure('CODEX_JOB_CALL_BUDGET_REQUIRED')
     def integrate():
         return call_with_retries(repository, settings, job, provider, integration, schema,
-            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs))
+            lambda value: validate_generation(value, payload, meeting).model_dump(), fingerprint(inputs), runtime=runtime)
     return checkpoint(repository, settings, job, 'SUMMARIZE', inputs, integrate)

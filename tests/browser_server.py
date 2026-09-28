@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='minutes-browser-') as directory:
         metadata=DocumentMetadata(title=video['title'], source_kind='youtube',
             source_url='https://www.youtube.com/watch?v=AbCde_123-4', channel='시험 채널'),
         summary='발표자가 매출과 전망을 설명했다.',
-        topics=[Topic(id='video-topic', title='매출 전망', text='발표자의 예측이며 독립 사실 확인은 수행하지 않았다.',
+        topics=[Topic(id='video-topic', title='매출 전망', text='발표자는 작년 매출 30억 원과 내년 증가 전망을 설명했다. 발표자의 예측이며 독립 사실 확인은 수행하지 않았다.',
                       starts=[TopicStart(start_ms=3601000, end_ms=3605000, utterance_ids=['video-source'])])],
         claims=[{'text': '작년 매출 30억 원', 'attribution': '발표자', 'kind': 'number'}])
     with repo.write() as connection:

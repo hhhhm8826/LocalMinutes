@@ -32,7 +32,7 @@ def test_failed_summary_preserves_transcript_and_retry_only_calls_minutes(contex
             return {'meeting_id': payload['meeting_id'], 'transcript_version': payload['transcript_version'],
                     'revision': payload['revision'], 'summary': '검토할 발언이 없습니다.',
                     'topics': [], 'decisions': [], 'action_items': [], 'open_questions': [], 'review_notes': []}, {'usage': {}}
-    monkeypatch.setattr('meeting_minutes.minutes_pipeline.CodexCliProvider', Provider)
+    monkeypatch.setattr('meeting_minutes.ai_runtime.CodexCliProvider', Provider)
     state, reason = run_minutes(repo, settings, job)
     assert (state, reason) == ('FAILED', 'CODEX_TIMEOUT')
     assert repo.meeting(meeting['id'])['transcript_version'] == version
@@ -48,6 +48,12 @@ def test_failed_summary_preserves_transcript_and_retry_only_calls_minutes(contex
     assert len(calls) == 2
     with repo.engine.connect() as connection:
         assert connection.execute(text('SELECT COUNT(*) FROM minutes_revisions')).scalar_one() == 1
+        result = json.loads(connection.execute(text('SELECT content_json FROM minutes_revisions')).scalar_one())
+        assert result['metadata']['ai_provider'] == 'codex_cli'
+        assert result['metadata']['ai_configured_model'] == 'gpt-6-astra'
+        usage = [json.loads(value) for value in connection.execute(text('SELECT metrics_json FROM usage_records')).scalars()]
+        reserved = [value for value in usage if value.get('call_reserved')]
+        assert reserved and all(value['provider'] == 'codex_cli' and value['policy_revision'] == 1 for value in reserved)
 
 
 def test_no_consent_cannot_reach_provider(context, monkeypatch):  # noqa: F811
@@ -57,5 +63,5 @@ def test_no_consent_cannot_reach_provider(context, monkeypatch):  # noqa: F811
     save_original(repo, job, {'speakers': {}, 'segments': []})
     def forbidden(*args):
         raise AssertionError('must not call external provider')
-    monkeypatch.setattr('meeting_minutes.minutes_pipeline.CodexCliProvider', forbidden)
+    monkeypatch.setattr('meeting_minutes.ai_runtime.CodexCliProvider', forbidden)
     assert run_minutes(repo, settings, job) == ('BLOCKED', 'EXTERNAL_TEXT_NOT_ALLOWED')

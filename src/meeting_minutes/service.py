@@ -23,7 +23,12 @@ def render(root, settings):
            'MINUTES_CACHE_DIR': str(settings.cache_dir), 'MINUTES_CODEX_HOME': str(settings.codex_home),
            'MINUTES_CODEX_USER_HOME': str(settings.codex_user_home), 'MINUTES_CODEX_CLI': str(settings.codex_cli),
            'MINUTES_WEB_DIR': str(root / 'apps/web/dist'), 'MINUTES_ORIGIN': settings.origin,
-           'MINUTES_THREADS': str(settings.threads), 'MINUTES_CODEX_MODEL': settings.codex_model}
+           'MINUTES_THREADS': str(settings.threads), 'MINUTES_CODEX_MODEL': settings.codex_model,
+           'MINUTES_CODEX_TIMEOUT_SECONDS': str(settings.codex_timeout_seconds),
+           'MINUTES_CODEX_INPUT_BYTES': str(settings.codex_input_bytes), 'MINUTES_CODEX_MAX_CALLS': str(settings.codex_max_calls),
+           'MINUTES_CLAUDE_CLI': str(settings.claude_cli), 'MINUTES_CLAUDE_HOME': str(settings.claude_home),
+           'MINUTES_CLAUDE_USER_HOME': str(settings.claude_user_home),
+           'MINUTES_YOUTUBE_DENO': str(settings.youtube_deno), 'MINUTES_YOUTUBE_BWRAP': str(settings.youtube_bwrap)}
     lines = ['[Unit]', 'Description=Local Meeting Minutes', 'After=network.target', '', '[Service]', 'Type=simple',
              'WorkingDirectory=' + str(root).replace('%', '%%'),
              'ExecStart=/bin/bash ' + quote(root / 'scripts/run.sh', command=True),

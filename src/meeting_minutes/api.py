@@ -1,4 +1,5 @@
 """루프백 API. 모델은 별도 작업 프로세스에서만 로드한다."""
+from .gemini_budget import RequestBudgetUpdate
 from contextlib import asynccontextmanager
 import secrets
 import time
@@ -9,12 +10,16 @@ from urllib.parse import urlsplit
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from . import __version__
+from . import ai_policy, ai_budget
+from .ai_secrets import GeminiSecretStore, SecretStoreError
 from .logging import configure_log, event
 from .security import COOKIE, digest, owner_session, local_session, ensure_local_session, has_owner, prepare_owner_key
 from .settings import Settings
@@ -30,6 +35,7 @@ from .transcripts import current_transcript, edit_transcript, list_transcripts
 from .library import audio_path, export_download, media_info
 from .deletion import purge_meeting, request_delete
 from .retention import RetentionUpdate, policy, update_policy
+from .claude_diagnostics import runtime_status as claude_runtime_status
 from .diagnostics import app_usage, model_cache, runtime_status, storage_status
 from .youtube_jobs import register_youtube
 from .processes import ProcessFailure
@@ -49,6 +55,7 @@ def create_app(settings: Settings | None = None):
 
     @asynccontextmanager
     async def lifespan(app):
+        GeminiSecretStore(settings)
         settings.prepare()
         prepare_owner_key(settings.owner_key_path)
         engine = make_engine(settings.database_path)
@@ -56,6 +63,7 @@ def create_app(settings: Settings | None = None):
         settings.database_path.chmod(0o600)
         app.state.engine = engine
         app.state.repository = Repository(engine)
+        ai_policy.ensure_policy(app.state.repository, settings)
         app.state.login_attempts = []
         app.state.login_lock = threading.Lock()
         app.state.diagnostic_lock = threading.Lock()
@@ -98,6 +106,58 @@ def create_app(settings: Settings | None = None):
     async def invalid_minutes(request, exc):
         return JSONResponse({'detail': exc.code}, status_code=422)
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_failure(request, exc):
+        if request.url.path.startswith('/api/settings/ai'):
+            # Pydantic errors can include raw secret input, including malformed JSON.
+            return JSONResponse({'detail': 'AI_REQUEST_INVALID'}, status_code=422, headers={'Cache-Control':'no-store'})
+        return await request_validation_exception_handler(request, exc)
+
+    @app.exception_handler(SecretStoreError)
+    async def secret_failure(request, exc):
+        status = 409 if exc.code.endswith('CONFLICT') else 422
+        return JSONResponse({'detail': exc.code}, status_code=status, headers={'Cache-Control':'no-store'})
+
+    @app.get('/api/settings/ai/budget/{provider}')
+    def get_ai_budget(provider: ai_policy.ProviderId, session=Depends(owner_session)):
+        return ai_budget.get_status(app.state.repository, provider)
+
+    @app.patch('/api/settings/ai/budget/{provider}')
+    def change_ai_budget(provider: ai_policy.ProviderId, body: ai_budget.BudgetUpdate | RequestBudgetUpdate, session=Depends(owner_session)):
+        return ai_budget.update(app.state.repository, body, provider)
+
+    @app.get('/api/settings/ai')
+    def get_ai_settings(session=Depends(owner_session)):
+        return ai_policy.owner_status(app.state.repository, settings)
+
+    @app.post('/api/settings/ai/{provider}/check')
+    def check_ai_provider(provider: ai_policy.ProviderId, body: ai_policy.AICheck, session=Depends(owner_session)):
+        from .ai_checks import check_provider
+        return check_provider(app.state.repository, settings, provider, body.model)
+
+    @app.get('/api/ai-status')
+    def minimal_ai_status(session=Depends(local_session)):
+        value = ai_policy.policy(app.state.repository)
+        provider = value['active_provider']
+        ready = ai_policy.readiness(app.state.repository, settings, provider, value['models'][provider])
+        return {'label': ai_policy.PROVIDERS[provider], 'ready': ready['ready']}
+
+    @app.patch('/api/settings/ai')
+    def change_ai_settings(body: ai_policy.AIUpdate, session=Depends(owner_session)):
+        return ai_policy.update_policy(app.state.repository, settings, body)
+
+    @app.put('/api/settings/ai/gemini-key')
+    def store_gemini_key(body: ai_policy.KeyUpdate, session=Depends(owner_session)):
+        status = GeminiSecretStore(settings).replace(body.key.get_secret_value(), body.expected_credential_revision)
+        ai_policy.invalidate_key_status(app.state.repository)
+        return status
+
+    @app.delete('/api/settings/ai/gemini-key')
+    def delete_gemini_key(body: ai_policy.KeyDelete, session=Depends(owner_session)):
+        status = GeminiSecretStore(settings).delete(body.expected_credential_revision)
+        ai_policy.invalidate_key_status(app.state.repository)
+        return status
+
     @app.post('/api/meetings')
     def create_meeting(body: MeetingCreate, request: Request, session=Depends(local_session)):
         automatic = body.model_copy(update={'language': 'auto', 'speakers': None, 'allow_external_text': True})
@@ -115,7 +175,7 @@ def create_app(settings: Settings | None = None):
     @app.post('/api/videos/youtube')
     def create_youtube(body: YoutubeCreate, request: Request, session=Depends(local_session)):
         try:
-            job = register_youtube(app.state.repository, body.url, body.title, request.headers.get('idempotency-key', ''))
+            job = register_youtube(app.state.repository, body.url, body.title, request.headers.get('idempotency-key', ''), settings=settings)
         except ProcessFailure as exc:
             raise HTTPException(status_code=422, detail=exc.code) from exc
         return JSONResponse(job, status_code=202)
@@ -305,7 +365,7 @@ def create_app(settings: Settings | None = None):
         with app.state.diagnostic_lock:
             cached = app.state.runtime_diagnostic
             if cached is None or time.time() - cached['checked_at'] >= 30:
-                cached = runtime_status(settings)
+                cached = {'codex':runtime_status(settings), 'claude':claude_runtime_status(settings), 'checked_at':time.time()}
                 app.state.runtime_diagnostic = cached
         return {"version": __version__, "database_revision": revision, "device": "cpu",
                 "worker_alive": app.state.worker is not None and app.state.worker.poll() is None,
@@ -313,7 +373,7 @@ def create_app(settings: Settings | None = None):
                 "max_upload_bytes": settings.max_upload_bytes,
                 "max_duration_seconds": settings.max_duration_seconds, "external_text_requires_consent": True,
                 "storage": storage_status(settings), "model_cache": model_cache(settings),
-                "runtime": cached, "usage": app_usage(app.state.repository)}
+                "runtime": cached['codex'], "claude_runtime": cached['claude'], "usage": app_usage(app.state.repository)}
 
     if settings.web_dir and settings.web_dir.is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")

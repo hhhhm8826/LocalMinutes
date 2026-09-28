@@ -29,4 +29,4 @@ if [[ ! -f apps/web/dist/index.html ]]; then
   (cd apps/web && npm ci --no-audit --no-fund && npm run build)
 fi
 .venv/bin/python -c 'from meeting_minutes.settings import Settings; from meeting_minutes.storage import make_engine,migrate; s=Settings(); s.prepare(); e=make_engine(s.database_path); migrate(e); e.dispose()'
-printf '%s\n' '설치 완료. 모델 준비·런타임 로그인 후 scripts/doctor.sh로 확인하세요.' '실행: bash scripts/run.sh'
+printf '%s\n' '설치 완료. 모델 준비 후 scripts/doctor.sh로 로컬 처리 상태를 확인하세요.' 'AI 요약은 소유자 설정에서 Codex·Gemini·Claude 중 준비된 공급자를 선택하세요. 미연결 AI는 로컬 처리 설치 실패가 아닙니다.' '실행: bash scripts/run.sh'

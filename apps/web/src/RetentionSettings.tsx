@@ -18,7 +18,7 @@ export function RetentionSettings() {
       catch (e) { setError((e as Error).message) } finally { setBusy(false) }
     }}><fieldset disabled={busy}><label className="checkbox"><input type="checkbox" checked={value.enabled} onChange={e => setValue({ ...value, enabled: e.target.checked })} />자동 삭제 사용</label>
       <div className="toolbar">{([['media_days', '원본·재생용 음성·영상'], ['transcript_days', '전사·정렬·화자 임베딩']] as const).map(([field, label]) => <label key={field}>{label} 보관 일수<input type="number" min={1} max={36500} value={value[field] ?? ''} onChange={e => setValue({ ...value, [field]: e.target.value ? Number(e.target.value) : null })} /></label>)}</div>
-      <p>음성 만료 후에는 재생만, 전사 만료 후에는 원문 확인·재생성만 제한됩니다. 회의록·요약본과 버전은 남으며 회의록 편집·확정·내보내기는 계속 사용할 수 있습니다. 별도로 만든 백업·내보낸 파일은 자동 삭제 대상이 아닙니다.</p>
+      <p>음성 만료 후에는 재생만, 전사 만료 후에는 원문 확인·재생성만 제한됩니다. 회의록·요약본과 버전은 남으며 회의록 편집·내보내기는 계속 사용할 수 있습니다. 별도로 만든 백업·내보낸 파일은 자동 삭제 대상이 아닙니다.</p>
       <button className="primary">보관 정책 저장</button></fieldset></form>}
     {error && <p role="alert" className="error">{error} · 다른 탭에서 정책을 바꿨다면 설정 화면을 다시 열어주세요.</p>}{notice && <p role="status">{notice}</p>}
   </section>

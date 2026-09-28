@@ -10,8 +10,8 @@ import tarfile
 
 
 SCRIPTS = ('install-ubuntu.sh', 'setup-toolchain.py', 'setup-youtube.py', 'run.sh', 'stop.sh', 'backup.sh', 'restore.sh',
-           'doctor.sh', 'login-codex.sh', 'prepare-models.sh', 'install-service.sh', 'dev-windows.ps1',
-           'check.sh', 'check-evidence.py', 'check-costly.py', 'check-line-endings.py', 'build-release.py', 'verify_dispatch.py', 'consume-review-acks.py')
+           'doctor.sh', 'setup-claude.py', 'login-claude.py', 'import-gemini-key.py', 'login-codex.sh', 'prepare-models.sh', 'install-service.sh', 'dev-windows.ps1',
+           'check.sh', 'sync-source.py', 'check-evidence.py', 'check-costly.py', 'check-line-endings.py', 'build-release.py', 'verify_dispatch.py', 'consume-review-acks.py')
 REQUIRED = ('README.md', 'AGENTS.md', '.gitattributes', '.editorconfig', 'docs/milestone.md', 'docs/workflow.md',
             'pyproject.toml', 'uv.lock', 'apps/web/package.json', 'apps/web/package-lock.json', 'apps/web/dist/index.html',
             'notices/THIRD_PARTY.md', 'notices/PYTHON_DEPENDENCIES.json',
@@ -22,17 +22,19 @@ def collect(root):
     files = set(REQUIRED) | {'scripts/' + name for name in SCRIPTS}
     for directory, suffixes in [('src', {'.py', '.json'}), ('notices', {'.txt', '.md'}),
                                 ('apps/web/src', {'.ts', '.tsx', '.css'}), ('apps/web/dist', None),
-                                ('tests', {'.py'}), ('apps/web/e2e', {'.ts'})]:
+                                ('tests', {'.py', '.json'}), ('apps/web/e2e', {'.ts'})]:
         files.update(str(path.relative_to(root)) for path in (root / directory).rglob('*')
                      if path.is_file() and '__pycache__' not in path.parts and (suffixes is None or path.suffix in suffixes))
     files.update('apps/web/' + name for name in
                  ('index.html', 'playwright.config.ts', 'tsconfig.json', 'vite.config.ts'))
     for name in files:
         path = root / name
-        if path.is_symlink() or not path.is_file() or path.resolve().is_relative_to(root.resolve()) is False:
+        if any(parent.is_symlink() for parent in [path, *path.parents] if parent != root.parent) or not path.is_file() or path.resolve().is_relative_to(root.resolve()) is False:
             raise ValueError('Invalid release file: ' + name)
-        if any(part in {'.workflow', '.git', '.codex', 'data', 'node_modules', '.venv'} for part in path.relative_to(root).parts):
-            raise ValueError('Private release path: ' + name)
+        if any(part in {'.workflow', '.git', '.codex', '.apikey', '.claude', 'claude-home', 'claude-user-home', 'codex-home', 'runtime-user-home', 'auth.json', '.credentials.json', 'owner-key', 'gemini.json', '.gemini_api_key', '.claude.json', 'data', 'node_modules', '.venv'} for part in path.relative_to(root).parts):
+            raise ValueError('Private release path')
+        if any(part.startswith(('.gemini-', '.claude.json.')) for part in path.relative_to(root).parts):
+            raise ValueError('Private release temporary path')
     return sorted(files)
 
 

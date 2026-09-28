@@ -11,7 +11,10 @@ from .repository import Conflict, identifier
 from .youtube_policy import canonical_url
 
 
-def register_youtube(repository, url, title, key):
+def register_youtube(repository, url, title, key, *, settings=None):
+    from .ai_snapshot import capture
+    from .settings import Settings
+    settings = settings or Settings()
     url = canonical_url(url)
     if not re.fullmatch(r'[a-zA-Z0-9_-]{8,100}', key):
         raise Conflict('INVALID_IDEMPOTENCY_KEY')
@@ -31,6 +34,7 @@ def register_youtube(repository, url, title, key):
             {'id': meeting, 'title': options.title or 'YouTube 영상', 'settings': options.model_dump_json(),
              'source': json.dumps({'source_url': url}), 'now': now})
         connection.execute(text("""INSERT INTO jobs(id,meeting_id,kind,state,stage,attempt_id,idempotency_key,
-            request_hash,created_at,updated_at) VALUES (:id,:meeting,'transcribe','QUEUED','SOURCE_CHECK',:attempt,:key,:hash,:now,:now)"""),
-            {'id': job, 'meeting': meeting, 'attempt': attempt, 'key': key, 'hash': digest, 'now': now})
+            request_hash,created_at,updated_at,ai_config_json) VALUES (:id,:meeting,'transcribe','QUEUED','SOURCE_CHECK',:attempt,:key,:hash,:now,:now,:ai_config)"""),
+            {'id': job, 'meeting': meeting, 'attempt': attempt, 'key': key, 'hash': digest, 'now': now,
+             'ai_config': capture(connection, settings, {'document_kind': 'video_summary'}).model_dump_json()})
     return repository.job(job)

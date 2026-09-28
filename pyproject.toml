@@ -19,6 +19,7 @@ dependencies = [
   "python-multipart==0.0.32",
   "yt-dlp==2026.8.19",
   "yt-dlp-ejs==0.8.0",
+  "google-genai==2.25.0",
 ]
 
 [tool.uv]

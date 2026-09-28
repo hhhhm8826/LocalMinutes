@@ -68,7 +68,7 @@ def register(context, name='sample.wav'):
     data = wav_bytes()
     stored = meeting['id'] + '.wav'
     (settings.data_dir / 'media' / stored).write_bytes(data)
-    job, created = repo.register_media(meeting['id'], name, stored, len(data), hashlib.sha256(data).hexdigest(), meeting['id'], meeting['id'])
+    job, created = repo.register_media(meeting['id'], name, stored, len(data), hashlib.sha256(data).hexdigest(), meeting['id'], meeting['id'], settings=settings)
     assert created
     return job
 

@@ -30,12 +30,15 @@ class Settings(BaseSettings):
                            'toolchain/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex')
     codex_home: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'codex-home')
     codex_user_home: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'runtime-user-home')
+    claude_cli: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'toolchain/claude-2.1.283/claude')
+    claude_home: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'claude-home')
+    claude_user_home: Path = Field(default_factory=lambda: user_path('XDG_DATA_HOME', '.local/share') / 'claude-user-home')
     codex_model: str = 'gpt-6-astra'
     codex_timeout_seconds: int = Field(default=180, ge=10, le=1800)
     codex_input_bytes: int = Field(default=150000, ge=1000, le=1000000)
     codex_max_calls: int = Field(default=10, ge=1, le=30)
 
-    @field_validator("data_dir", "config_dir", "cache_dir", "web_dir", "codex_cli", "codex_home", "codex_user_home", "youtube_deno", "youtube_bwrap")
+    @field_validator("data_dir", "config_dir", "cache_dir", "web_dir", "codex_cli", "codex_home", "codex_user_home", "youtube_deno", "youtube_bwrap", "claude_cli", "claude_home", "claude_user_home")
     @classmethod
     def absolute_path(cls, value):
         if value is None:

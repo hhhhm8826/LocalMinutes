@@ -123,7 +123,7 @@ export function Library({ kind = 'meeting' }: { kind?: 'meeting' | 'video_summar
           {['RUNNING', 'CANCEL_REQUESTED'].includes(job.state) && <small>처리 시간 {Math.floor(job.elapsed_seconds || 0)}초</small>}
           {(job.blocked_reason || job.error_code) && <p role="status">{jobError((job.blocked_reason || job.error_code)!, job.source_kind === 'youtube')}</p>}
           {['QUEUED', 'RUNNING', 'BLOCKED', 'INTERRUPTED', 'FAILED'].includes(job.state) && <button disabled={busy === job.id} onClick={() => void action(job, 'cancel')}>취소</button>}
-          {['BLOCKED', 'INTERRUPTED', 'FAILED', 'CANCELLED'].includes(job.state) && <button disabled={busy === job.id} onClick={() => void action(job, 'retry')}>재시도</button>}
+          {!['AI_WEEKLY_BUDGET_EXHAUSTED', 'AI_DAILY_REQUEST_BUDGET_EXHAUSTED', 'AI_REQUEST_RATE_WAIT'].includes(job.blocked_reason || '') && ['BLOCKED', 'INTERRUPTED', 'FAILED', 'CANCELLED'].includes(job.state) && <button disabled={busy === job.id} onClick={() => void action(job, 'retry')}>재시도</button>}
           {job.transcript_version && ['BLOCKED', 'INTERRUPTED', 'FAILED', 'CANCELLED'].includes(job.state) && <button disabled={busy === job.id} onClick={() => void action(job, 'finish-transcript-only')}>전사만 완료</button>}
         </div>}</article>
     })}</div>

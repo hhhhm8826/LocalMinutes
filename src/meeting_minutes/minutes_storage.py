@@ -4,36 +4,50 @@ import time
 
 from sqlalchemy import text
 
-from .codex_provider import CodexFailure
+from .ai_common import AIFailure
 from .repository import Conflict, identifier
 
 
-def reserve_call(repository, job, maximum, fingerprint, *, purpose='initial', purpose_limit=None):
+def reserve_call(repository, job, maximum, fingerprint, *, purpose='initial', purpose_limit=None, token_estimate=215536):
     with repository.write() as connection:
         repository.assert_current(connection, job)
         rows = connection.execute(text("SELECT metrics_json FROM usage_records WHERE job_id=:job AND stage='SUMMARIZE'"),
                                   {'job': job['id']}).scalars().all()
         reservations = sum(json.loads(value).get('call_reserved', False) for value in rows)
         if reservations >= maximum:
-            raise CodexFailure('CODEX_JOB_CALL_BUDGET_EXHAUSTED')
+            raise AIFailure('CODEX_JOB_CALL_BUDGET_EXHAUSTED')
         if purpose_limit is not None and sum(json.loads(value).get('purpose') == purpose for value in rows) >= purpose_limit:
-            raise CodexFailure('CODEX_RETRY_BUDGET_EXHAUSTED')
+            raise AIFailure('CODEX_RETRY_BUDGET_EXHAUSTED')
+        raw_config = connection.execute(text('SELECT ai_config_json FROM jobs WHERE id=:id'), {'id': job['id']}).scalar_one()
+        source = {}
+        if raw_config:
+            from .ai_snapshot import AIConfig
+            config = AIConfig.model_validate_json(raw_config)
+            source = {'provider': config.provider, 'configured_model': config.model, 'policy_revision': config.policy_revision,
+                      'adapter_version': config.adapter_version}
         record_id = identifier()
+        from .ai_budget import reserve
+        reserve(connection, record_id, source.get('provider', 'codex_cli'), token_estimate)
         connection.execute(text('''INSERT INTO usage_records(id,job_id,attempt_id,stage,metrics_json,created_at)
             VALUES (:id,:job,:attempt,'SUMMARIZE',:metrics,:now)'''),
             {'id': record_id, 'job': job['id'], 'attempt': job['attempt_id'],
-             'metrics': json.dumps({'call_reserved': True, 'status': 'RESERVED', 'fingerprint': fingerprint, 'purpose': purpose}), 'now': time.time()})
+             'metrics': json.dumps({**source, 'call_reserved': True, 'status': 'RESERVED', 'fingerprint': fingerprint, 'purpose': purpose}), 'now': time.time()})
     return record_id
 
 
 def finish_call(repository, record_id, status, metrics):
     # Reservation survives crashes and cancellation; updating metrics never refunds it.
     allowed = {'usage', 'item_types', 'error_codes', 'completed', 'wall_seconds', 'model', 'cli_version', 'stderr_sha256',
-               'context_budget', 'prompt_bytes'}
+               'context_budget', 'prompt_bytes', 'actual_model', 'sdk_version'}
+    from .ai_common import safe_diagnostic
     with repository.write() as connection:
         value = json.loads(connection.execute(text('SELECT metrics_json FROM usage_records WHERE id=:id'),
                                              {'id': record_id}).scalar_one())
         value.update({key: item for key, item in metrics.items() if key in allowed})
+        if 'diagnostic' in metrics:
+            value['diagnostic'] = safe_diagnostic(metrics['diagnostic'])
+        from .ai_budget import settle
+        settle(connection, record_id, metrics.get('usage'))
         value['status'] = status
         connection.execute(text('UPDATE usage_records SET metrics_json=:metrics WHERE id=:id'),
                            {'id': record_id, 'metrics': json.dumps(value)})
@@ -75,3 +89,20 @@ def save_minutes(repository, job, result, base_minutes_id):
                 connection.execute(text('UPDATE meetings SET title=:title,settings_json=:options WHERE id=:id'),
                     {'id': job['meeting_id'], 'title': value.metadata.title, 'options': json.dumps(options, ensure_ascii=False)})
     return {'id': new_id, 'content': value.model_dump()}
+
+
+def actual_model_for_job(repository, job, config):
+    # Cached result reuse may not call the adapter in this attempt. Keep source metadata
+    # from the persisted successful call instead of substituting today's active model.
+    with repository.engine.connect() as connection:
+        rows = connection.execute(text("SELECT metrics_json FROM usage_records WHERE job_id=:id AND stage='SUMMARIZE' ORDER BY created_at DESC"),
+                                  {'id': job['id']}).scalars().all()
+        # Exhaust the cursor before returning the pooled connection: an early match
+        # with unread rows can otherwise leave a SQLite read snapshot alive.
+        for raw in rows:
+            value = json.loads(raw)
+            if (value.get('status') == 'VALIDATED' and value.get('provider') == config.provider
+                    and value.get('configured_model') == config.model):
+                actual = value.get('actual_model')
+                return actual if isinstance(actual, str) and len(actual) <= 100 else None
+    return None

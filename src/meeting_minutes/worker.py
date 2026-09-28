@@ -23,10 +23,12 @@ from .temporary import cleanup_attempt_temporary
 
 
 def worker_env(settings):
-    env = os.environ.copy()
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(('ANTHROPIC_', 'CLAUDE_', 'GOOGLE_', 'GEMINI_', 'OPENAI_', 'CODEX_'))
+           and key not in {'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AZURE_OPENAI_API_KEY'}}
     for field in ('data_dir', 'config_dir', 'cache_dir', 'max_duration_seconds', 'threads', 'codex_cli',
                   'codex_home', 'codex_user_home', 'codex_model', 'codex_timeout_seconds', 'codex_input_bytes', 'codex_max_calls',
-                  'youtube_deno', 'youtube_bwrap'):
+                  'youtube_deno', 'youtube_bwrap', 'claude_cli', 'claude_home', 'claude_user_home'):
         env['MINUTES_' + field.upper()] = str(getattr(settings, field))
     return env
 

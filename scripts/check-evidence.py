@@ -8,6 +8,10 @@ from pathlib import Path
 REQUIRED = {'model-ko', 'model-en', 'live-ko', 'live-en', 'live-long', 'installation'}
 REQUIRED_PROFILES = {
     'mvp': REQUIRED,
+    'm3': {'secret-boundaries', 'provider-contracts', 'queue-snapshots', 'web-settings',
+           'legacy-compatibility', 'operations', 'installation', 'review-m3-a', 'review-m3-b', 'regression',
+           'live-codex-meeting', 'live-codex-video', 'live-gemini-meeting', 'live-gemini-video',
+           'live-claude-meeting', 'live-claude-video'},
     'm2': {'model-ko', 'model-en', 'live-meeting', 'live-video',
            'semantic-comparison', 'youtube-acquisition', 'installation'},
 }
@@ -46,6 +50,23 @@ def audit(root, manifest_path, include_soak=False, profile='mvp'):
         evidence = inside(manifest_path.parent, check['path'])
         if not evidence.is_file() or digest(evidence) != check['sha256']:
             reasons.append('EVIDENCE_CHANGED_OR_MISSING')
+        elif profile == 'm3' and check['status'] == 'PASS':
+            recorded = json.loads(evidence.read_text())
+            if check['id'].startswith('review-'):
+                if recorded.get('verdict') != 'PASS':
+                    reasons.append('RECORDED_REVIEW_NOT_PASS')
+                if not check.get('head_commit') or recorded.get('head_commit') != check['head_commit']:
+                    reasons.append('REVIEW_COMMIT_MISMATCH')
+            elif recorded.get('status') != 'PASS':
+                reasons.append('RECORDED_RESULT_NOT_PASS')
+            if check['id'].startswith('live-'):
+                _, provider, kind = check['id'].split('-')
+                expected_provider = {'codex':'codex_cli','gemini':'gemini_api','claude':'claude_cli'}[provider]
+                expected_kind = 'meeting' if kind == 'meeting' else 'video_summary'
+                if (recorded.get('execution_kind') != 'live' or recorded.get('provider') != expected_provider
+                        or recorded.get('kind') != expected_kind or not recorded.get('document')
+                        or not recorded.get('metrics', {}).get('completed')):
+                    reasons.append('LIVE_EXECUTION_NOT_PROVEN')
         for name, expected in check.get('artifacts', {}).items():
             artifact = inside(manifest_path.parent, name)
             if not artifact.is_file() or digest(artifact) != expected:

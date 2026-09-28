@@ -55,6 +55,10 @@ class Topic(Contract):
 
 
 class DocumentMetadata(Contract):
+    ai_provider: Literal['codex_cli', 'gemini_api', 'claude_cli'] | None = None
+    ai_configured_model: str | None = Field(default=None, max_length=100)
+    ai_actual_model: str | None = Field(default=None, max_length=100)
+    ai_policy_revision: int | None = Field(default=None, ge=0)
     title: str = Field(max_length=200)
     occurred_at: str | None = None
     timezone: str = 'Asia/Seoul'

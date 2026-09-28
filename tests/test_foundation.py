@@ -44,7 +44,7 @@ def test_migration_is_repeatable_and_single_active_job_is_enforced(settings):
         assert connection.execute(text("SELECT title FROM meetings")).scalar_one() == "회의"
         assert connection.exec_driver_sql("PRAGMA journal_mode").scalar_one() == "wal"
         assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0010"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0012"
         columns = {row[1] for row in connection.exec_driver_sql('PRAGMA table_info(jobs)')}
         assert 'process_identity_json' in columns
     insert = text("""INSERT INTO jobs(id,meeting_id,kind,state,stage,attempt_id,idempotency_key,request_hash,created_at,updated_at)

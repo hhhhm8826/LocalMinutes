@@ -117,7 +117,7 @@ def test_populated_upgrade_preserves_result_parents_and_job_links(tmp_path):
     with engine.connect() as connection:
         assert connection.execute(text('SELECT * FROM minutes_revisions ORDER BY id')).all() == before
         assert connection.execute(text('SELECT minutes_result_id FROM jobs')).scalar_one() == 'two'
-        assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == '0009'
+        assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == '0012'
         upgraded = connection.execute(text('SELECT * FROM meetings WHERE id=:id'),
                                       {'id': meeting['id']}).mappings().one()
         assert (upgraded['document_kind'], upgraded['source_kind']) == ('meeting', 'file')

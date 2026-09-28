@@ -11,6 +11,7 @@ from .contracts import Minutes
 from .documents import legacy_document, parse_document
 from .document_edits import validate_edit
 from .minutes_identity import generation_identity
+from .ai_snapshot import capture
 from .minutes_validation import text_payload, validate_minutes
 from .repository import Conflict, Missing, identifier
 
@@ -43,7 +44,8 @@ def queue_generation(repository, settings, meeting_id, request, key):
         settings_options = dict(options)
         options.update(document_kind=meeting['document_kind'], source_kind=meeting['source_kind'],
                        source_metadata=json.loads(meeting['source_metadata_json']))
-        identity = generation_identity(request.transcript_version, options, settings)
+        ai_config = capture(connection, settings, options)
+        identity = generation_identity(request.transcript_version, options, settings, ai_config)
         candidates = connection.execute(text('''SELECT * FROM jobs WHERE meeting_id=:meeting
             AND json_extract(request_json,'$.generation_key')=:identity ORDER BY sequence DESC'''),
             {'meeting': meeting_id, 'identity': identity}).mappings().all()
@@ -63,10 +65,10 @@ def queue_generation(repository, settings, meeting_id, request, key):
                     'base_minutes_id': meeting['minutes_revision'], 'revision': number, 'generation_key': identity}
         job_id, now = identifier(), time.time()
         connection.execute(text('''INSERT INTO jobs(id,meeting_id,kind,state,stage,attempt_id,idempotency_key,
-            request_hash,created_at,updated_at,transcript_version,request_json)
-            VALUES (:id,:meeting,'summarize','QUEUED','SUMMARIZE',:attempt,:key,:hash,:now,:now,:version,:snapshot)'''),
+            request_hash,created_at,updated_at,transcript_version,request_json,ai_config_json)
+            VALUES (:id,:meeting,'summarize','QUEUED','SUMMARIZE',:attempt,:key,:hash,:now,:now,:version,:snapshot,:ai_config)'''),
             {'id': job_id, 'meeting': meeting_id, 'attempt': identifier(), 'key': key, 'hash': digest, 'now': now,
-             'version': request.transcript_version, 'snapshot': json.dumps(snapshot, ensure_ascii=False)})
+             'version': request.transcript_version, 'snapshot': json.dumps(snapshot, ensure_ascii=False), 'ai_config': ai_config.model_dump_json()})
         if not json.loads(meeting['settings_json'])['allow_external_text']:
             connection.execute(text('UPDATE meetings SET settings_json=:settings,revision=revision+1,updated_at=:now WHERE id=:id'),
                                {'settings': json.dumps(settings_options), 'now': now, 'id': meeting_id})

@@ -120,14 +120,16 @@ def test_minutes_edit_http_csrf_large_valid_body_and_invalid_evidence(context): 
         assert len(client.get(f'/api/meetings/{meeting["id"]}/minutes/versions').json()) == 3
 
 
-def test_queued_generation_rejects_changed_model_configuration(context, monkeypatch):  # noqa: F811
+def test_queued_generation_preserves_registered_model_configuration(context, monkeypatch):  # noqa: F811
     settings, repo = context
     meeting, version = ready(context)
     queue_generation(repo, settings, meeting['id'], GenerateMinutes(expected_revision=meeting['revision'],
         transcript_version=version, allow_external_text=True), 'config-change-job')
     job = repo.claim()
     settings.codex_model = 'different-model'
-    def forbidden(*args):
-        raise AssertionError('must not silently substitute a different model')
-    monkeypatch.setattr('meeting_minutes.minutes_pipeline.CodexCliProvider', forbidden)
-    assert run_minutes(repo, settings, job) == ('BLOCKED', 'CODEX_GENERATION_CONFIG_CHANGED')
+    def forbidden(effective):
+        assert effective.codex_model == 'gpt-6-astra'
+        from meeting_minutes.ai_common import AIFailure
+        raise AIFailure('TEST_ORIGINAL_MODEL')
+    monkeypatch.setattr('meeting_minutes.ai_runtime.CodexCliProvider', forbidden)
+    assert run_minutes(repo, settings, job) == ('FAILED', 'TEST_ORIGINAL_MODEL')

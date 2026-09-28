@@ -4,7 +4,7 @@ import re
 
 from pydantic import ValidationError
 
-from .codex_provider import CodexFailure
+from .ai_common import AIFailure
 from .documents import (DocumentMetadata, GeneratedMeeting, ManualAction, MeetingDocument,
                         Topic, resolve_starts, normalize_meeting_topics, GeneratedVideo, VideoClaim, VideoDocument)
 from .minutes_validation import text_payload, validate_minutes
@@ -29,7 +29,7 @@ def generation_payload(meeting_id, version, revision, meeting, transcript):
     try:
         reading = derive_utterances(transcript, version)
     except ValueError as exc:
-        raise CodexFailure(str(exc)) from exc
+        raise AIFailure(str(exc)) from exc
     payload.update(document_kind=meeting.get('document_kind', 'meeting'), utterance_rule=RULE_VERSION,
                    prompt_version=prompt_version(meeting),
                    segments=[dict(u, overlap='overlap' in u['uncertainty']) for u in reading['utterances']])
@@ -47,17 +47,17 @@ def validate_generation(value, payload, meeting):
         for topic in result.topics:
             resolve_starts(topic.ranges, reading)
     except (ValueError, ValidationError) as exc:
-        raise CodexFailure('MINUTES_SCHEMA_INVALID') from exc
+        raise AIFailure('MINUTES_SCHEMA_INVALID') from exc
     if isinstance(result, GeneratedVideo):
         if any(getattr(result, key) != payload[key] for key in ('meeting_id', 'transcript_version', 'revision')):
-            raise CodexFailure('MINUTES_SNAPSHOT_MISMATCH')
+            raise AIFailure('MINUTES_SNAPSHOT_MISMATCH')
         if len({topic.id for topic in result.topics}) != len(result.topics):
-            raise CodexFailure('MINUTES_DUPLICATE_IDS')
+            raise AIFailure('MINUTES_DUPLICATE_IDS')
         sources = {segment['id'] for segment in payload['segments']}
         if any(not set(claim.source_segment_ids) <= sources or not claim.attribution.strip() for claim in result.claims):
-            raise CodexFailure('MINUTES_EVIDENCE_REQUIRED')
+            raise AIFailure('MINUTES_EVIDENCE_REQUIRED')
         if not re.search('[가-힣]', result.summary):
-            raise CodexFailure('MINUTES_KOREAN_REQUIRED')
+            raise AIFailure('MINUTES_KOREAN_REQUIRED')
         return result
     legacy_validation = result.model_dump(exclude={'document_kind', 'schema_version', 'topics', 'title'})
     # Topic ranges may span more than the old 100-word evidence-list limit.
@@ -67,7 +67,7 @@ def validate_generation(value, payload, meeting):
                      if key not in {'document_kind', 'source_kind', 'source_metadata'}})
     all_items = [*result.topics, *result.decisions, *result.action_items, *result.open_questions]
     if len({item.id for item in all_items}) != len(all_items):
-        raise CodexFailure('MINUTES_DUPLICATE_IDS')
+        raise AIFailure('MINUTES_DUPLICATE_IDS')
     return result
 
 
@@ -76,7 +76,7 @@ def materialize_generation(value, payload, meeting):
     reading = {'utterances': payload['segments']}
     title = (meeting.get('source_metadata', {}).get('title') if meeting.get('source_kind') == 'youtube' and not meeting.get('title') else None) or meeting.get('title') or result.title
     if not title or not title.strip():
-        raise CodexFailure('DOCUMENT_TITLE_REQUIRED')
+        raise AIFailure('DOCUMENT_TITLE_REQUIRED')
     topics = []
     for topic in result.topics:
         starts = resolve_starts(topic.ranges, reading)

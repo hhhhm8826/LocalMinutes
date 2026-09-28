@@ -47,7 +47,8 @@ def expire_meeting(repository, settings, meeting_id, now):
         if not current['enabled'] or not meeting:
             return
         jobs = connection.execute(text('SELECT * FROM jobs WHERE meeting_id=:id'), {'id': meeting_id}).mappings().all()
-        if any(job['pid'] is not None or job['state'] in {'QUEUED', 'RUNNING', 'CANCEL_REQUESTED'} for job in jobs):
+        if any(job['pid'] is not None or job['state'] in {'QUEUED', 'RUNNING', 'CANCEL_REQUESTED'}
+               or (job['state'] == 'BLOCKED' and job['blocked_reason'] in {'AI_WEEKLY_BUDGET_EXHAUSTED', 'AI_DAILY_REQUEST_BUDGET_EXHAUSTED', 'AI_REQUEST_RATE_WAIT'}) for job in jobs):
             return
         def expired(field):
             anchor = meeting['input_received_at']
