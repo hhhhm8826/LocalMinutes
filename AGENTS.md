@@ -1,6 +1,6 @@
 # Agent Instructions
 
-- Read `docs/milestone.md` for implemented features and active milestones, and `docs/workflow.md` for execution, review, and `.workflow` rules. Use `README.md` for setup and operation.
+- Read `docs/milestone.md` for implemented features and active milestones, and `docs/workflow.md` for execution, review, and `.workflow` rules. Keep `README.md` concise: overview, quick start, basic usage, and links to the detailed docs.
 - Keep these three documents current when behavior, commands, or milestones change. Update milestone status before completion; keep detailed evidence/resume state in `.workflow`, not in prose change logs. Keep this file concise and in English.
 - Use exactly two existing sessions: **Astra medium master + Sol 5.6 high verifier**. Delegate commit-pinned, scoped verification through `codex queue`; never create extra sessions or repeat full validation after every task.
 - Run actual development and tests in Ubuntu/WSL. Synchronize the Linux source and Windows working copy; preserve unrelated changes and immutable review results.
